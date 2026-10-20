@@ -11,21 +11,35 @@ https://docs.djangoproject.com/en/3.2/ref/settings/
 """
 
 from pathlib import Path
+import os
+
+from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / ".env")
+
+
+def env_bool(name, default=False):
+    return os.environ.get(name, str(default)).strip().lower() in {
+        "1", "true", "yes", "on"
+    }
+
+
+def env_list(name, default=""):
+    return [item.strip() for item in os.environ.get(name, default).split(",") if item.strip()]
 
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/3.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-q5hzm1eo#-t*d$!vhv)-)bf4n6=59b)-t)#wo3933(6)99i8a$'
+SECRET_KEY = os.environ["DJANGO_SECRET_KEY"]
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = env_bool("DJANGO_DEBUG")
 
-ALLOWED_HOSTS = ['http://176.97.218.214','176.97.218.214','127.0.0.1']
+ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "127.0.0.1,localhost")
 
 
 # Application definition
@@ -47,6 +61,7 @@ INSTALLED_APPS = [
     'blog.apps.BlogConfig',
     'api.apps.ApiConfig',
     'account.apps.AccountConfig',
+    'message.apps.MessageConfig',
     'call.apps.CallConfig',
     'payment.apps.PaymentConfig',
     'ticket.apps.TicketConfig',
@@ -96,17 +111,13 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # https://docs.djangoproject.com/en/3.2/ref/settings/#databases
 
 DATABASES = {
-    # 'default': {
-    #     'ENGINE': 'django.db.backends.sqlite3',
-    #     'NAME': BASE_DIR / 'db.sqlite3',
-    # }
     'default': {
-        'ENGINE'  : 'django.db.backends.mysql',
-        'NAME'    : 'mytestdb',
-        'USER'    : 'test',
-        'PASSWORD': 'Secret_1234',
-        'HOST'    : 'localhost',
-        'PORT'    : '3306',
+        'ENGINE': os.environ.get('DB_ENGINE', 'django.db.backends.mysql'),
+        'NAME': os.environ['DB_NAME'],
+        'USER': os.environ['DB_USER'],
+        'PASSWORD': os.environ['DB_PASSWORD'],
+        'HOST': os.environ.get('DB_HOST', 'localhost'),
+        'PORT': os.environ.get('DB_PORT', '3306'),
     }
 }
 
@@ -148,7 +159,6 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/3.2/howto/static-files/
 
 STATIC_URL = '/static/'
-import os
 STATIC_ROOT = os.path.join(BASE_DIR, 'static/')
 
 # Default primary key field type
@@ -169,15 +179,18 @@ REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.LimitOffsetPagination', 'PAGE_SIZE': 20,
 }
 
-CORS_ALLOWED_ORIGINS = [
-    "http://gosheshenava.com",
-    "https://gosheshenava.com",
-    "http://176.97.218.214",
+CORS_ALLOWED_ORIGINS = env_list(
+    "CORS_ALLOWED_ORIGINS",
     "http://localhost:8080",
-]
+)
 
 AUTH_USER_MODEL = "account.User"
 
 MEDIA_URL = "/files/"
 MEDIA_ROOT = BASE_DIR / "files"
 
+# MeliPayamak Console OTP endpoint configuration. Keep the token outside source
+# control and provide it through the deployment environment.
+MELIPAYAMAK_OTP_TOKEN = os.environ.get("MELIPAYAMAK_OTP_TOKEN", "")
+MELIPAYAMAK_OTP_TIMEOUT = 10
+AUTH_OTP_TTL_SECONDS = 120

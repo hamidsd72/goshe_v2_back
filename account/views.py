@@ -1,5 +1,8 @@
 from .serializers import CrUserSerializer, MyUserSerializer, UserAmountSerializer, AdminUserSerializer
+from .services import OtpDeliveryError, send_auth_otp
+from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.utils import timezone
 from rest_framework.viewsets import ModelViewSet
 from api.permissions import IsIdOrReadOnly
 from api.permissions import IsSuperUserOrReadOnly, IsSuperUser
@@ -50,49 +53,35 @@ class CreateCodeUserViewSet(APIView):
     permission_classes = [AllowAny,]
     def post(self, request):
         try:
-            code = randint(100000, 999999)
-            user = get_user_model().objects.get(username=request.data['username'])            
-            data = {"username": request.data['username'],"code": code}
-            codeRefreshserializer = CrUserSerializer(user,data=data)
-            if(codeRefreshserializer.is_valid()):
-                codeRefreshserializer.save()
-                # title = "کد تایید شماره موبایل شما : "+str(codeRefreshserializer.data["code"])+" مشاوره آنلاین گوش شنوا"
-                # base = "curl -X POST https://console.melipayamak.com/api/send/simple/a5b595bca39b4e35b603dfd52d5f90d2 -H 'Content-Type: application/json' -d "
-                # froM = '{"from":"50004001624956","to":'
-                # data = '"'+request.data['username']+'"'+','
-                # end = '"text":'+'"'+title+'"}'
-                # msg = base+"'"+froM+data+end+"' "
-                # curl = '''curl -X POST https://console.melipayamak.com/api/send/simple/a5b595bca39b4e35b603dfd52d5f90d2 -H 'Content-Type: application/json' -d '{"from":"50004001624956","to":"09211150145","text":"پیامک"}' '''
-                #new curl -X POST https://console.melipayamak.com/api/send/shared/1515c626310f4b529d6af64d0acedafe -H 'Content-Type: application/json' -d '{ "bodyId": 69553, "to": "09133624956", "args": ["123456"] }'
-                # is_wrong = 3
-                # if(is_wrong < 5):
-                title  = '"args": [ "'+str(codeRefreshserializer.data["code"])+'" ]'
-                base   = "curl -X POST https://console.melipayamak.com/api/send/shared/7cf1b880b4a94b6391298ca0a23b2bae -H 'Content-Type: application/json' -d "
-                # bodyId = '{"bodyId": 69553,"to":'
-                bodyId = '{"bodyId": 69932,"to":'
-                to     = ' "'+request.data['username']+'"'+', '
-                end    = title+'}'
-                msg    = base+"'"+bodyId+to+end+"' "
-                os.system(msg)
-                    # is_wrong += 1
-                # return Response( {"one":curl,"two":msg} )
-                return Response({"msg": "کد جدید ایجاد شد"}, status=200)
-            else:
-                return Response({"msg": "کد جدید ایجاد شد"}, status=200)
-                #return Response(codeRefreshserializer.errors, status=400)
-        except:
+            username = str(request.data['username']).strip()
+            user = get_user_model().objects.get(username=username)
+        except (KeyError, get_user_model().DoesNotExist):
             return Response({"errors": "شماره یافت نشد"}, status=400)
+
+        try:
+            code = send_auth_otp(username)
+        except OtpDeliveryError:
+            return Response({"errors": "ارسال کد تایید ناموفق بود"}, status=503)
+
+        user.code = code
+        user.timer = timezone.now() + timedelta(seconds=settings.AUTH_OTP_TTL_SECONDS)
+        user.save(update_fields=["code", "timer"])
+        return Response({"msg": "کد جدید ایجاد شد"}, status=200)
 
 class GetCodeUserViewSet(APIView):
     permission_classes = [AllowAny,]
     def post(self, request):
         try:
-            user = get_user_model().objects.get(username=request.data['username']).code
-            if user == int(request.data['code']):
+            user = get_user_model().objects.get(username=request.data['username'])
+            if user.timer < timezone.now():
+                return Response({"allow": False, "errors": "کد منقضی شده است"}, status=400)
+            if user.code == int(request.data['code']):
+                user.code = None
+                user.save(update_fields=["code"])
                 return Response({"allow": True}, status=200)
             # return Response({"allow": False,"code":getCodeSerializer.data["code"] }, status=200)
             return Response({"allow": False}, status=200)
-        except:
+        except (KeyError, TypeError, ValueError, get_user_model().DoesNotExist):
             return Response({"errors": "user not found"}, status=400)
 
 class CallCreateCodeUserViewSet(APIView):
@@ -149,4 +138,3 @@ class UserAmountViewSet(ModelViewSet):
     queryset = get_user_model().objects.all().order_by('-id')
     serializer_class = UserAmountSerializer
     permission_classes = [IsSuperUserOrReadOnly]
-

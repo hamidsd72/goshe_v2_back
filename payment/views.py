@@ -9,6 +9,8 @@ from api.serializers import PaymentTransactionSerializer, PayedExamSerializer
 from account.serializers import MyUserSerializer, UserAmountSerializer
 from rest_framework.permissions import AllowAny
 
+novinoMerchantID    = '7C066B0E-BD31-4786-AF43-5B188445E7E5'
+
 class PaymentCreateViewSet(APIView):
     def post(self, request):
         try:
@@ -133,3 +135,113 @@ class PaymentExamViewSet(APIView):
         except:
             return Response({"error": "مشگل داخلی سرور"}, status=400)
  
+
+class novinoCreateViewSet(APIView):
+    def post(self, request):
+        try:
+            try:
+                transaction = Transaction.objects.get(id=request.data['order_id']) 
+            except:
+                return Response({"msg": "تراکنش یافت نشد"}, status=400)
+            
+            try:
+                transactionserializer = PaymentTransactionSerializer(transaction)
+            except:
+                return Response({"msg": "خطا در مدل"}, status=400)
+            
+            url = "https://api.novinopay.com/payment/ipg/v2/request"
+
+            headers = {
+                'Content-Type': 'application/json'
+            }
+
+            data    = json.dumps({
+                'merchant_id': novinoMerchantID,
+                'amount': str(transactionserializer.data["amount"]),
+                'callback_url': 'http://app.cafemoshaver.com/callback/' + str(transactionserializer.data["id"]) + '/',
+                'invoice_id': str(transactionserializer.data["id"]),
+                'callback_method': 'GET'
+            })
+
+            response    = requests.request("POST", url, headers=headers, data=data)
+            json_data   = json.loads(response.text)
+                
+            try:
+                if json_data['status'] == '100':
+                    try:
+                        data    = json_data['data']
+                        updatetransactionserializer = PaymentTransactionSerializer(
+                            transaction,
+                            data={"type": "b", "idPay_id": data['authority'], "track_id": data['trans_id'], "link": data['payment_url'] }
+                        )
+                        
+                        if updatetransactionserializer.is_valid():
+                            updatetransactionserializer.save()
+                            return Response( {"link": updatetransactionserializer.data["link"] }, status=200)
+                        return Response( updatetransactionserializer.errors, status=400)
+                    except:
+                        return Response({"msg": response.json()}, status=400)
+            except:
+                return Response({"msg": "خطا در ارتباط با درگاه"}, status=400)
+            
+            
+        except:
+            return Response({"msg": "مشگل ناشناخته"}, status=400)
+            
+class novinoPaybackViewSet(APIView):
+    permission_classes = [AllowAny,]
+
+    def post(self, request): 
+        try:
+            transaction = Transaction.objects.filter(idPay_id=request.data['Authority']).first()
+            if request.data['PaymentStatus'] != 'OK':
+                return Response( {"authorLink": transaction.authorLink}, status=200)
+
+            transactionserializer = PaymentTransactionSerializer( transaction )
+        except:
+            return Response( {"msg": "تراکنش یافت نشد"}, status=400)
+        if transactionserializer.data["type"] == 'b':
+            url = "https://api.novinopay.com/payment/ipg/v2/verification"
+            
+            headers = {
+                'Content-Type': 'application/json'
+            }
+
+            data    = json.dumps({
+                'merchant_id': novinoMerchantID,
+                'amount': transactionserializer.data["amount"],
+                'authority': transactionserializer.data["idPay_id"]
+            })
+
+            try:
+                response    = requests.request("POST", url, headers=headers, data=data)
+                json_data   = json.loads(response.text)
+            except:
+                return Response( {"msg": "خظا از سامانه پرداخت"}, status=400)
+            
+            if json_data['status'] == '100' or json_data['status'] == '101':
+                params = {
+                    "type": "s",
+                    "status": json_data['status'],
+                    "track_id": json_data['data']['trans_id'],
+                    "card_no": json_data['data']["card_pan"],
+                    "payment": json_data['data']["ref_id"]
+                }
+
+                updatetransactionserializer = PaymentTransactionSerializer(transaction,data=params)
+                if updatetransactionserializer.is_valid():
+                    updatetransactionserializer.save()
+                    # return Response( updatetransactionserializer.data, status=200)
+                    user = get_user_model().objects.get(id=updatetransactionserializer.data["userId"])
+                    myuser = UserAmountSerializer(user)
+                    amount = myuser.data["amount"] + updatetransactionserializer.data["amount"]
+
+                    userAmountUpdate = UserAmountSerializer(user, data={"amount": amount, "username": myuser.data["username"]})
+                    if userAmountUpdate.is_valid():
+                        userAmountUpdate.save()
+                        return Response( {"authorLink": transaction.authorLink}, status=200)
+                    # return Response( userAmountUpdate.errors, status=200)
+                # return Response( updatetransactionserializer.errors, status=400)
+                return Response( {"msg": "خطا در ثبت گزارش جهت پیگیری با پشتیبانی تماس بگیرید"}, status=400)
+            return Response( {"msg": "پرداخت تکمیل نشده"}, status=400)
+        return Response( {"msg": "درخواست معتبر نیست"}, status=200)

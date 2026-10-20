@@ -1,6 +1,8 @@
 from django.db import models
 from account.models import User
 from extensions.utils import jalali_converter
+from django.utils import timezone
+from datetime import datetime, timedelta
 
 class Category(models.Model):
 	title    = models.CharField(max_length=250, verbose_name="عنوان")
@@ -108,6 +110,9 @@ class Follower(models.Model):
 
 	jpublish.short_description = 'تاریخ تولید'
 
+def one_year_from_now():
+	return datetime.now() + timedelta(days=365)
+
 class Author(models.Model):
 	status_choices = (('m','message'), ('c','call'), ('b','both'))
 	userId     = models.ForeignKey(User, null=True, on_delete=models.SET_NULL, related_name="userAuthor", verbose_name="کاربر")
@@ -130,6 +135,10 @@ class Author(models.Model):
 	services   = models.BooleanField(default=False, verbose_name="نوع سرویس")
 	created_at = models.DateTimeField(auto_now_add=True)
 	updated_at = models.DateTimeField(auto_now=True)
+	is_special = models.BooleanField(default=False, verbose_name="ویژه")
+	sort       = models.IntegerField(default=5, verbose_name="ترتیب")
+	service_time	= models.DateTimeField(default=one_year_from_now, verbose_name="زمان سرویس")
+	first_payment	= models.BooleanField(default=False, verbose_name="اولین پرداخت")
 
 	class Mete:
 		verbose_name = "نویسنده"
@@ -137,6 +146,12 @@ class Author(models.Model):
 		
 	def __str__(self):
 		return str(self.userId)
+
+	def is_payment_author(self):
+		if self.service_time > timezone.now():
+			return True
+		else:
+			return False
 		
 class Comment(models.Model):
 	userId     = models.ForeignKey(User, null=True, on_delete=models.SET_NULL, related_name="userComment", verbose_name="کاربر")
@@ -151,7 +166,6 @@ class Comment(models.Model):
 		verbose_name_plural = "کامنت ها"
 	def __str__(self):
 		return self.content+' - '+str(self.userId)
-
 
 # ----------------------------------------------------------
 class Question(models.Model):
@@ -193,7 +207,6 @@ class Exam(models.Model):
 	def __str__(self):
 		return str(self.userId)
 # ----------------------------------------------------------
-
 
 class CreateExam(models.Model):
 	status_choices = ( ('d','پیش نویس'), ('p','منتشر شده'), ('e','ویرایش شده') )
@@ -275,4 +288,3 @@ class AuthorVisit(models.Model):
 		return jalali_converter(self.visitTime)
 
 	jpublish.short_description = 'تاریخ تولید'
-	

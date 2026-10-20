@@ -14,7 +14,7 @@ NewestFromUserMessageViewSet, FindAuthorByFamilyViewSet, AdminFindAuthorByUserna
 
 from account.views import CreateCodeUserViewSet, GetCodeUserViewSet, CallCreateCodeUserViewSet, CreateTaskCallInTimeViewSet
 from call.views import CallCreateViewSet, UpdateCallCreateViewSet, CallAndMessageLogView, AdminCallCreateViewSet, AdminCallAndMessageLogView, FlashCallLogViewSet
-from payment.views import PaymentCreateViewSet, IdPayCallBack, PaymentExamViewSet
+from payment.views import PaymentCreateViewSet, IdPayCallBack, PaymentExamViewSet, novinoCreateViewSet, novinoPaybackViewSet
 from ticket.views import AdminTicketViewSet, SendAdminMsgToUserViewSet
 
 # from zarrinpall.views import payment, verify
@@ -49,6 +49,9 @@ urlpatterns = [
    path('payment_create/', PaymentCreateViewSet.as_view()),
    path('payment_verify/', IdPayCallBack.as_view()),
    path('payment-exam/', PaymentExamViewSet.as_view()),
+   
+   path('gateway-v4/payment-pay/', novinoCreateViewSet.as_view()),
+   path('gateway-v4/payment-payback/', novinoPaybackViewSet.as_view()),
 
    path('admin-ticket/', AdminTicketViewSet.as_view()),
   
@@ -78,6 +81,7 @@ urlpatterns = [
    path('', include('account.urls')),
    path('', include('ticket.urls')),
    path('', include('zarrinpall.urls')),
+   path('messages/', include('message.urls')),
 
    path('admin/', admin.site.urls),
    # for djoser

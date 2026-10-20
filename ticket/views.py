@@ -85,7 +85,7 @@ class SendAdminMsgToUserViewSet(APIView):
     def post(self, request):
         try:
             title  = '"args": [ "'+request.data['param']+'" ]'
-            base   = "curl -X POST https://console.melipayamak.com/api/send/shared/1515c626310f4b529d6af64d0acedafe -H 'Content-Type: application/json' -d "
+            base   = "curl -X POST https://console.melipayamak.com/api/send/shared/a5b595bca39b4e35b603dfd52d5f90d2 -H 'Content-Type: application/json' -d "
             bodyId = '{"bodyId": '+request.data['bodyId']+',"to":'
             to     = ' "'+request.data['username']+'"'+', '
             end    = title+'}'

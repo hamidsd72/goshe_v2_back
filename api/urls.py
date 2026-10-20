@@ -2,8 +2,8 @@ from rest_framework import routers
 from .views import ( CategoryViewSet ,NotifyViewSet ,TransactionViewSet ,MessageViewSet, CreateMessageViewSet ,FollowerViewSet ,
 CreateFollowerViewSet ,AuthorViewSet ,UserAuthorViewSet ,CreateAuthorViewSet ,CommentViewSet ,DocumentViewSet ,AdminUserAuthorViewSet ,
 AdminAuthorViewSet ,AdminTransactionViewSet ,UserRegisterShiftUsingAuthorViewSet ,AuthorShiftViewSet ,AuthorShiftListViewSet,
- CreateExamViewSet, UserExamForAuthorViewSet, QuestionsExamViewSet, VisitExamViewSet, CreateVisitExamViewSet
-)
+ CreateExamViewSet, UserExamForAuthorViewSet, QuestionsExamViewSet, VisitExamViewSet, CreateVisitExamViewSet, AuthorYearlyPriceViewSet)
+from django.urls import path
 
 app_name = 'api'
 router = routers.SimpleRouter()
@@ -33,3 +33,4 @@ router.register(r'user-register-shift-using-author', UserRegisterShiftUsingAutho
 router.register(r'author-shift', AuthorShiftViewSet)
 router.register(r'author-shift-list', AuthorShiftListViewSet)
 urlpatterns = router.urls
+urlpatterns += path('author-yearly-price/', AuthorYearlyPriceViewSet.as_view()),

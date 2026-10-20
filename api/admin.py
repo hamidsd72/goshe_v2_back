@@ -60,6 +60,7 @@ admin.site.register(Notify, NotifyAdmin)
 # ====================================================================================
 class TransactionAdmin(admin.ModelAdmin):
     list_display        = ('id','userId','amount','type','created_at','updated_at')
+    search_fields       = ('userId','amount')
     list_filter         = (['type'])
 
 admin.site.register(Transaction, TransactionAdmin)

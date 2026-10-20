@@ -58,7 +58,32 @@ class AuthorSerializer(serializers.ModelSerializer):
     userId = UserAuthorSerializer()
     class Meta:
         model  = Author
-        exclude = ("updated_at","status")
+        fields = [
+            'id',
+            'userId',
+            'shaba',
+            'category',
+            'uid',
+            'call_price',
+            'msg_price',
+            'older',
+            'oneDay',
+            'twoDay',
+            'treeDay',
+            'fourDay',
+            'fiveDay',
+            'sixDay',
+            'sevenDay',
+            'visit_type',
+            'certificate',
+            'services',
+            'created_at',
+            'is_special',
+            'sort',
+            'service_time',
+            'first_payment',
+            'is_payment_author'
+        ]
 
 class AdminAuthorSerializer(serializers.ModelSerializer):
     userId = UserAuthorSerializer()

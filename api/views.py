@@ -8,7 +8,8 @@ import datetime
 from .serializers import ( CategorySerializer ,NotifySerializer ,TransactionSerializer ,PaymentTransactionSerializer, HeadMessageSerializer ,
 MessageSerializer ,FollowerSerializer ,CreateFollowerSerializer, AuthorSerializer ,CreateAuthorSerializer ,CommentSerializer ,DocumentSerializer,
  FindAuthorAuthorSerializer, AdminAuthorSerializer, AdminEditAuthorSerializer, VisitSerializer, AuthorVisitSerializer, AuthorVisitListSerializer,
- CreateExamSerializer ,QuestionsExamSerializer ,VisitExamSerializer ,CreateVisitExamSerializer ,CreateAnswerVisitedExamSerializer ,UserVisitExamForAuthorSerializer )
+ CreateExamSerializer ,QuestionsExamSerializer ,VisitExamSerializer ,CreateVisitExamSerializer ,CreateAnswerVisitedExamSerializer
+   ,UserVisitExamForAuthorSerializer, UserAuthorSerializer )
 
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.permissions import AllowAny
@@ -22,16 +23,25 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 import os
 from rest_framework.pagination import PageNumberPagination
+from django.utils import timezone
+from django.db.models import Sum
+from datetime import datetime, timedelta
 
 class LargeResultsSetPagination(PageNumberPagination):
     page_size = 200
     page_size_query_param = 'page_size'
     max_page_size = 10000
+class MediumResultsSetPagination(PageNumberPagination):
+    page_size = 100
+    page_size_query_param = 'page_size'
+    max_page_size = 10000
 # messages
 class SendViewSet(APIView):
     def post(self, request):
+
         try:
             if request.data['isAuthor'] == 'notAuthor':
+                sendMsgToAuthor = get_user_model().objects.get(id=request.data['sendTo']).username
                 sendToUser  = Author.objects.filter(userId=request.data['sendTo']).first()
                 serializer1 = CreateAuthorSerializer(sendToUser)
                 msgPrice    = serializer1.data['msg_price'] * 10
@@ -52,7 +62,8 @@ class SendViewSet(APIView):
                 if(serializer4.is_valid()):
                     serializer4.save()
 
-                    msg = '''curl -X POST https://console.melipayamak.com/api/send/shared/1515c626310f4b529d6af64d0acedafe -H 'Content-Type: application/json' -d '{"bodyId": 74630, "to": '''+str('"0'+request.data['username']+'"')+''' ,"args": [] }' '''
+                    msg = '''curl -X POST https://console.melipayamak.com/api/send/shared/a5b595bca39b4e35b603dfd52d5f90d2 -H
+                      'Content-Type: application/json' -d '{"bodyId": 74630, "to": '''+str('"0'+sendMsgToAuthor+'"')+''' ,"args": [] }' '''
                     os.system(msg)
 
                     return Response(serializer3.data, status=201)
@@ -98,7 +109,7 @@ class CreateMessageViewSet(ModelViewSet):
 # =============================================================
 class NewestMessageViewSet(APIView):
     def get(self, request):
-        queryset = Message.objects.filter(sendTo=self.request.user.id).filter(status=False).count()
+        queryset = Message.objects.filter(sendTo=self.request.user.id).filter(userId__gt=0).filter(status=False).count()
         return Response({'messageNotSee': queryset}, status=200)
 # =============================================================
 class NewestFromUserMessageViewSet(APIView):
@@ -136,6 +147,14 @@ class DocumentViewSet(ModelViewSet):
     queryset = Document.objects.all()
     serializer_class = DocumentSerializer
     permission_classes = [IsUserIdOrReadOnly,]
+
+    def get_queryset(self):
+        queryset = Document.objects.all()
+        userId = self.request.query_params.get('userId')
+        if userId is not None:
+            queryset = queryset.filter(userId=userId)
+
+        return queryset
 # =============================================================
 # users notifications
 class NotifyViewSet(ModelViewSet):
@@ -214,13 +233,14 @@ class CreateFollowerViewSet(ModelViewSet):
 # =============================================================
 # authors data
 class AuthorViewSet(ModelViewSet):
-    queryset = Author.objects.order_by('-id')
+    queryset = Author.objects.order_by('sort')
     serializer_class = AuthorSerializer
     # lookup_field = "slug"
     permission_classes = [IsUserIdOrReadOnly]
+    pagination_class = MediumResultsSetPagination
 
     def get_queryset(self):
-        queryset = Author.objects.order_by('-services')
+        queryset = Author.objects.filter(service_time__gt=timezone.now()).order_by('-services', 'sort')
 
         status = self.request.query_params.get('status')
         if status is not None:
@@ -241,12 +261,12 @@ class AuthorViewSet(ModelViewSet):
         return queryset
 # =============================================================
 class AdminUserAuthorViewSet(ModelViewSet):
-    queryset = Author.objects.order_by('-id')
+    queryset = Author.objects.order_by('sort')
     serializer_class   = AdminAuthorSerializer
     permission_classes = [IsSuperUser]
 
     def get_queryset(self):
-        queryset = Author.objects.order_by('-id')
+        queryset = Author.objects.order_by('sort')
 
         status   = self.request.query_params.get('status')
         lastday  = self.request.query_params.get('lastday')
@@ -262,13 +282,13 @@ class AdminUserAuthorViewSet(ModelViewSet):
         return queryset
 # =============================================================
 class AdminAuthorViewSet(ModelViewSet):
-    queryset = Author.objects.order_by('-id')
+    queryset = Author.objects.order_by('sort')
     serializer_class = AdminEditAuthorSerializer
     # lookup_field = "slug"
     permission_classes = [IsSuperUser]
 
     def get_queryset(self):
-        queryset = Author.objects.order_by('-id')
+        queryset = Author.objects.order_by('sort')
 
         status = self.request.query_params.get('status')
         if status is not None:
@@ -289,7 +309,7 @@ class AdminFindAuthorByUsernameViewSet(APIView):
                 usersId = []
                 for user in userId:
                     usersId.append(user.id)
-                authors = Author.objects.filter(userId__in=usersId)
+                authors = Author.objects.filter(userId__in=usersId).order_by('sort')
                 data_list = []
                 for author in authors:
                     data_list.append(AdminAuthorSerializer(author).data)
@@ -298,13 +318,13 @@ class AdminFindAuthorByUsernameViewSet(APIView):
             return Response({"error": "author by this number or last_name not found"}, status=404)
 # =============================================================
 class UserAuthorViewSet(ModelViewSet):
-    queryset = Author.objects.order_by('-id')
+    queryset = Author.objects.order_by('sort')
     serializer_class = AuthorSerializer
     # lookup_field = "slug"
     permission_classes = [IsUserIdOrReadOnly]
 
     def get_queryset(self):
-        queryset = Author.objects.order_by('-id')
+        queryset = Author.objects.order_by('sort')
 
         userId = self.request.query_params.get('userId') 
         if userId is not None:
@@ -313,13 +333,13 @@ class UserAuthorViewSet(ModelViewSet):
         return queryset
 # =============================================================
 class CreateAuthorViewSet(ModelViewSet):
-    queryset = Author.objects.all()
+    queryset = Author.objects.order_by('sort')
     serializer_class = CreateAuthorSerializer
     lookup_field = "userId"
     permission_classes = [IsUserIdOrReadOnly]
 
     def get_queryset(self):
-        queryset = Author.objects.all()
+        queryset = Author.objects.order_by('sort')
 
         userId = self.request.query_params.get('userId')
         if userId is not None:
@@ -331,7 +351,7 @@ class FindAuthorListViewSet(APIView):
     def post(self, request):
         if not request.data['list']:
             return Response({'error': 'list is required'}, status=403)
-        authors = Author.objects.filter(userId__in=request.data['list'])
+        authors = Author.objects.filter(userId__in=request.data['list']).filter(status=True).order_by('sort')
         if not authors:
             return Response({'error': 'Author Not Found'}, status=200)
         data_list = []
@@ -352,7 +372,7 @@ class FindAuthorByFamilyViewSet(APIView):
         usersId = []
         for user in users:
             usersId.append(user.id)
-        authors = Author.objects.filter(userId__in=usersId).filter(status=True)
+        authors = Author.objects.filter(service_time__gt=timezone.now()).filter(userId__in=usersId).filter(status=True).order_by('sort')
         if not authors:
             return Response({'error': 'Author By This Name Or Family Not Found'}, status=404)
         data_list = []
@@ -367,10 +387,10 @@ class ProfileCountViewSet(APIView):
         if not request.data:
             return Response({'error': 'authorId is required'}, status=403)
         comment = Comment.objects.filter(authorId=request.data['authorId'])
-        if not comment:
-            return Response({'stars': 0,'count': 0,'calls': 0}, status=200)
-        stars   = comment.aggregate(Sum('stars'))['stars__sum'] / comment.count()
         calls   = CallLog.objects.filter(authorId=request.data['authorId']).count()
+        if not comment:
+            return Response({'stars': 0,'count': 0,'calls': calls}, status=200)
+        stars   = comment.aggregate(Sum('stars'))['stars__sum'] / comment.count()
         return Response(
             {
                 'stars': math.ceil(stars),
@@ -386,6 +406,7 @@ class CommentViewSet(ModelViewSet):
     serializer_class = CommentSerializer
     # lookup_field = "userId"
     permission_classes = [IsUserIdOrReadOnly]
+    pagination_class = LargeResultsSetPagination
 
     def get_queryset(self):
         queryset = Comment.objects.all()
@@ -685,9 +706,49 @@ class SendMessageViewSet(APIView):
             return Response({"error": "bodyId is required"}, status=404)
 
         try:
-            msg = '''curl -X POST https://console.melipayamak.com/api/send/shared/7cf1b880b4a94b6391298ca0a23b2bae -H 'Content-Type: application/json' -d '{"bodyId": '''+msgId+''', "to": '''+'"'+number+'"'+''' ,"args": ['''+'"'+args+'"'+'''] }' '''
+            msg = '''curl -X POST https://console.melipayamak.com/api/send/shared/a5b595bca39b4e35b603dfd52d5f90d2 -H 'Content-Type: application/json' -d '{"bodyId": '''+msgId+''', "to": '''+'"'+number+'"'+''' ,"args": ['''+'"'+args+'"'+'''] }' '''
             os.system(msg)
             return Response({"data": "is sended"}, status=200)
         except:
             return Response({"error": "internal server error"}, status=404)
-        
+
+class AuthorYearlyPriceViewSet(APIView):
+    def get(self, request):
+        yearly_price    = 500000
+        user            = get_user_model().objects.get(id=self.request.user.id)
+        author          = Author.objects.get(userId=user.id)
+        callQuery       = CallLog.objects.filter(authorId=user.id).aggregate(Sum('call_amount'))["call_amount__sum"]
+        messageQuery    = Message.objects.filter(sendTo=user.id).aggregate(Sum('amount'))["amount__sum"]
+
+        deposit         = 0
+        if callQuery != None:
+            if (((callQuery * 50) / 1000) > 1):
+                deposit += int((callQuery / 1000) * 50)
+        if messageQuery != None:
+            if (((messageQuery * 50) / 100) > 1):
+                deposit += int((messageQuery / 100 ) * 50)
+
+        withdraw        = Transaction.objects.filter(userId=user.id).filter(type='w').aggregate(Sum("amount"))["amount__sum"]
+        if withdraw != None:
+            deposit     -= withdraw
+
+        if(deposit >= yearly_price):
+            create_payment_request  = PaymentTransactionSerializer(data={"userId": user.id, "type": 'w', "amount": yearly_price})
+            author_service_time     = AdminEditAuthorSerializer(author, data={
+                "userId": user.id,
+                "service_time": datetime.now() + timedelta(days=365),
+                "first_payment": True,
+                "category": AdminEditAuthorSerializer(author).data['category']
+            })
+            if(author_service_time.is_valid()):
+                pass
+            else:
+                return Response(author_service_time.errors, status=400)
+                
+            if(create_payment_request.is_valid() and author_service_time.is_valid()):
+                create_payment_request.save()
+                author_service_time.save()
+                return Response({"msg": 'با موفقیت پرداخت شد.'}, status=201)
+            return Response({"msg": 'مشگل در هنگام پرداخت.'}, status=200)
+        return Response({"msg": "موجودی کافی نیست."}, status=200)
+# =============================================================        
