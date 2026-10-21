@@ -81,7 +81,6 @@ urlpatterns = [
    path('', include('account.urls')),
    path('', include('ticket.urls')),
    path('', include('zarrinpall.urls')),
-   path('messages/', include('message.urls')),
 
    path('admin/', admin.site.urls),
    # for djoser

@@ -61,7 +61,6 @@ INSTALLED_APPS = [
     'blog.apps.BlogConfig',
     'api.apps.ApiConfig',
     'account.apps.AccountConfig',
-    'message.apps.MessageConfig',
     'call.apps.CallConfig',
     'payment.apps.PaymentConfig',
     'ticket.apps.TicketConfig',
