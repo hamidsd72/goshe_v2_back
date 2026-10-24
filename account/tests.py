@@ -1,10 +1,10 @@
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
 from unittest.mock import Mock, patch
 from datetime import timedelta
 
-from .services import OtpDeliveryError, normalize_iran_mobile, send_auth_otp
+from .services import OtpDeliveryError, _extract_otp, normalize_iran_mobile, send_auth_otp
 
 
 class MobileNormalizationTests(TestCase):
@@ -16,7 +16,25 @@ class MobileNormalizationTests(TestCase):
             normalize_iran_mobile("123")
 
 
-class MeliPayamakOtpServiceTests(TestCase):
+class MeliPayamakOtpServiceTests(SimpleTestCase):
+    @patch("account.services.requests.post")
+    def test_accepts_actual_provider_five_digit_response(self, post):
+        response = Mock()
+        response.json.return_value = {"code": "12345", "status": "عملیات موفق"}
+        post.return_value = response
+
+        with self.settings(
+            MELIPAYAMAK_OTP_TOKEN="test-token",
+            MELIPAYAMAK_OTP_TIMEOUT=4,
+        ):
+            self.assertEqual(send_auth_otp("9123456789"), 12345)
+
+    def test_rejects_invalid_provider_codes(self):
+        for code in ("", "1234", "1234567", "abcde", None):
+            with self.subTest(code=code):
+                with self.assertRaises(OtpDeliveryError):
+                    _extract_otp({"code": code})
+
     @patch("account.services.requests.post")
     def test_sends_mobile_and_returns_provider_otp(self, post):
         response = Mock()

@@ -23,7 +23,7 @@ def _extract_otp(payload):
 
     for key in ("code", "otp", "value", "Value"):
         value = payload.get(key)
-        if value is not None and re.fullmatch(r"\d{6}", str(value)):
+        if value is not None and re.fullmatch(r"[0-9]{5,6}", str(value)):
             return int(value)
 
     data = payload.get("data")
