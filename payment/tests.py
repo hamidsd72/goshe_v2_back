@@ -58,12 +58,28 @@ class PaystarClientTests(SimpleTestCase):
         self.assertGreaterEqual(post.call_args.kwargs["timeout"], 10)
 
     @patch("payment.paystar.requests.post")
-    def test_missing_config_and_http_callback_fail_before_network(self, post):
-        for setting in ({"PAYSTAR_CALLBACK_URL": "http://api.example.com/callback"},
+    def test_missing_config_and_invalid_callback_fail_before_network(self, post):
+        for setting in ({"PAYSTAR_CALLBACK_URL": "ftp://app.example.com/callback"},
+                        {"PAYSTAR_CALLBACK_URL": "/payment/result"},
+                        {"PAYSTAR_CALLBACK_URL": "https://app.example.com/payment/result#fragment"},
+                        {"PAYSTAR_CALLBACK_URL": "http://user@app.example.com/payment/result"},
                         {"PAYSTAR_SIGN_KEY": ""}, {"PAYSTAR_GATEWAY_ID": ""}):
             with override_settings(**setting), self.assertRaises(PaystarError):
                 create_payment(100000, 7)
         post.assert_not_called()
+
+    @patch("payment.paystar.requests.post")
+    @override_settings(PAYSTAR_CALLBACK_URL="http://app.example.com/payment/result")
+    def test_http_frontend_callback_is_allowed_and_signed_unchanged(self, post):
+        post.return_value = provider_response({
+            "token": "test-token", "ref_num": "ref-7", "order_id": "7", "payment_amount": 100000,
+        })
+        create_payment(100000, 7)
+        payload = post.call_args.kwargs["json"]
+        self.assertEqual(post.call_args.args[0], BASE_URL + "/create")
+        self.assertEqual(payload["callback"], "http://app.example.com/payment/result")
+        self.assertEqual(payload["callback_method"], 1)
+        self.assertEqual(payload["sign"], sign(100000, "7", payload["callback"]))
 
     @patch("payment.paystar.requests.post")
     def test_create_rejects_failed_malformed_or_mismatched_responses(self, post):

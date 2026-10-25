@@ -77,8 +77,8 @@ def create_payment(amount, order_id):
     amount = rial_amount(amount)
     callback = settings.PAYSTAR_CALLBACK_URL
     parsed = urlsplit(callback)
-    if parsed.scheme != "https" or not parsed.netloc or parsed.fragment or parsed.username:
-        raise PaystarError("آدرس بازگشت درگاه باید HTTPS و متعلق به دامنه ثبت‌شده باشد")
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc or parsed.fragment or parsed.username:
+        raise PaystarError("آدرس بازگشت درگاه معتبر نیست")
     order_id = str(order_id)
     data = _post("create", {
         "amount": amount,

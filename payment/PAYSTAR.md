@@ -13,7 +13,7 @@ PAYSTAR_CALLBACK_URL=https://doctor.gosheshenava.com/payment/result
 PAYMENT_FRONTEND_URL=https://<public-frontend-host>
 ```
 
-New payments return directly to the public HTTPS **Vue** page `/payment/result`
+New payments return directly to the public HTTP or HTTPS **Vue** page `/payment/result`
 via GET (`callback_method=1`). Paystar must authorize the actual callback domain,
 including `doctor.gosheshenava.com`; registration of the root domain alone does
 not prove that subdomains are accepted. Confirm this with Paystar before release.
@@ -56,7 +56,17 @@ the upstream socket is the one used by this project. The proxy strips the
 host in Django's `ALLOWED_HOSTS` when using this proxy. With a same-origin API,
 cross-origin CORS permission is not needed. The user stays on the frontend
 domain; API requests are still visible in browser developer tools.
-Do not deploy until HTTPS and routing are verified. Restart the application
+The application permits HTTP callbacks; provider acceptance must be checked
+with the actual gateway configuration. HTTPS remains recommended because HTTP
+does not encrypt callback metadata or protect the frontend from tampering.
+For the current HTTP frontend deployment, set manually:
+
+```dotenv
+PAYSTAR_CALLBACK_URL=http://doctor.gosheshenava.com/payment/result
+PAYMENT_FRONTEND_URL=http://doctor.gosheshenava.com
+```
+
+Do not deploy until callback routing is verified. Restart the application
 after configuring its environment; this implementation does not edit it.
 
 Requests use a 20-second timeout and verification may additionally perform an
