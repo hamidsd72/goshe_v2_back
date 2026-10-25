@@ -80,6 +80,7 @@ urlpatterns = [
    path('', include('api.urls')),
    path('', include('account.urls')),
    path('', include('ticket.urls')),
+   path('', include('payment.urls')),
    path('', include('zarrinpall.urls')),
 
    path('admin/', admin.site.urls),

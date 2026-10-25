@@ -193,3 +193,10 @@ MEDIA_ROOT = BASE_DIR / "files"
 MELIPAYAMAK_OTP_TOKEN = os.environ.get("MELIPAYAMAK_OTP_TOKEN", "")
 MELIPAYAMAK_OTP_TIMEOUT = 10
 AUTH_OTP_TTL_SECONDS = 120
+
+# Paystar credentials are supplied manually through the deployment environment.
+PAYSTAR_GATEWAY_ID = os.environ.get("PAYSTAR_GATEWAY_ID", "")
+PAYSTAR_SIGN_KEY = os.environ.get("PAYSTAR_SIGN_KEY", "")
+PAYSTAR_CALLBACK_URL = os.environ.get("PAYSTAR_CALLBACK_URL", "")
+PAYMENT_FRONTEND_URL = os.environ.get("PAYMENT_FRONTEND_URL", "https://doctor.gosheshenava.com")
+PAYSTAR_TIMEOUT = 20
