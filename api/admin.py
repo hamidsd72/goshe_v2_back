@@ -27,8 +27,8 @@ class AuthorAdmin(admin.ModelAdmin):
         return ", ".join([ category.title for category in obj.category.all() ])
     category_to_str.short_description = "دسته بندی" 
 
-    list_filter         = (['services'])
-    search_fields       = ('status','userId')
+    list_filter         = ('services', 'status')
+    search_fields       = ('userId__username', 'userId__first_name', 'userId__last_name')
     # prepopulated_fields = {'slug': ('title',)}
     ordering            = ['status']
 
