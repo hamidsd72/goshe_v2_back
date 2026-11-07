@@ -129,8 +129,8 @@ class SettlementTests(TestCase):
         data['paid_at'] = actual.isoformat()
         self.assertEqual(self.confirm(data).status_code, 200)
         from .reports import build_report
-        from zoneinfo import ZoneInfo
-        day = actual.astimezone(ZoneInfo('Asia/Tehran')).date()
+        from .reports import TEHRAN_TIMEZONE
+        day = actual.astimezone(TEHRAN_TIMEZONE).date()
         report = build_report(start=day, end=day)
         self.assertEqual(report['results'][0]['paid_in_period'], 40000)
 

@@ -1,6 +1,6 @@
 """Read-only period reports. Historical payments have no source allocation."""
 from datetime import datetime, time, timedelta
-from zoneinfo import ZoneInfo
+from pytz import timezone as pytz_timezone
 
 from django.contrib.auth import get_user_model
 from django.db.models import Q, Sum
@@ -12,8 +12,11 @@ from call.models import CallLog
 from .services import calculate_revenue
 
 
+TEHRAN_TIMEZONE = pytz_timezone('Asia/Tehran')
+
+
 def date_boundary(value):
-    return timezone.make_aware(datetime.combine(value, time.min), ZoneInfo('Asia/Tehran'))
+    return timezone.make_aware(datetime.combine(value, time.min), TEHRAN_TIMEZONE)
 
 
 def totals(queryset, owner_field, amount_field):
@@ -106,7 +109,7 @@ def financial_events(kind, start=None, end=None, consultant=None, search=''):
             'first_name': item.userId.first_name, 'last_name': item.userId.last_name,
             'phone': item.userId.username, 'transaction_id': str(item.pk),
             'amount_toman': item.amount,
-            'event_at': item.event_at.astimezone(ZoneInfo('Asia/Tehran')).isoformat(),
+            'event_at': item.event_at.astimezone(TEHRAN_TIMEZONE).isoformat(),
             'event_kind': ('برگشت پرداخت' if document.reverses_id else 'پرداخت تأییدشده') if document else 'کسورات قدیمی w',
             'bank_reference': document.batch.bank_reference if document else '',
             'confirmed_by': str(document.batch.confirmed_by_id) if document else '',
@@ -120,6 +123,6 @@ def build_detailed_report(report_type='performance', **filters):
     report = build_report(**filters)
     events = financial_events(report_type, **filters) if report_type in ('payments', 'settlements') else None
     result = project_report(report_type, report, events, start=filters.get('start'), end=filters.get('end'),
-                            generated_at=timezone.now().astimezone(ZoneInfo('Asia/Tehran')).isoformat())
+                            generated_at=timezone.now().astimezone(TEHRAN_TIMEZONE).isoformat())
     result['filter_description'] = 'مشاور {} | جست‌وجو {}'.format(filters.get('consultant') or 'همه', filters.get('search') or 'همه')
     return result
