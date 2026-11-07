@@ -60,6 +60,7 @@ INSTALLED_APPS = [
     # my app
     'blog.apps.BlogConfig',
     'api.apps.ApiConfig',
+    'consultant_accounting.apps.ConsultantAccountingConfig',
     'account.apps.AccountConfig',
     'message.apps.MessageConfig',
     'call.apps.CallConfig',
