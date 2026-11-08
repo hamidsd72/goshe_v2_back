@@ -113,7 +113,7 @@ class BankExportTests(TestCase):
         self.assertEqual(preview.data['total_rial'], 20000000)
         response = self.download(preview.data['token'])
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.content, 'IR760140040004110176408212,20000000,زهرا,حسین پور,حقوق,\r\n'.encode('utf-8'))
+        self.assertEqual(response.content, 'IR760140040004110176408212,20000000,زهرا,حسین پور,حق المشاوره,\r\n'.encode('utf-8'))
         self.assertEqual(Transaction.objects.count(), 0)
         self.assertEqual(self.download(preview.data['token']).status_code, 200)
         self.assertEqual(Transaction.objects.count(), 0)

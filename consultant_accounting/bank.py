@@ -1,4 +1,4 @@
-"""Parsian sample format: IBAN,rial,first name,last name,حقوق, + CRLF."""
+"""Parsian sample format: IBAN,rial,first name,last name,حق المشاوره, + CRLF."""
 import re
 
 
@@ -38,5 +38,5 @@ def bank_row(row, current_balance):
 def render_bank_file(rows):
     if not rows or any(row['errors'] for row in rows):
         raise ValueError('Only validated, nonempty bank rows can be exported.')
-    return ''.join('{iban},{amount_rial},{first_name},{last_name},حقوق,\r\n'.format(**row)
+    return ''.join('{iban},{amount_rial},{first_name},{last_name},حق المشاوره,\r\n'.format(**row)
                    for row in rows).encode('utf-8')

@@ -12,7 +12,7 @@ class BankFileTests(unittest.TestCase):
         row = bank_row(self.row, 200000)
         self.assertEqual(row['errors'], [])
         self.assertEqual(render_bank_file([row]),
-                         'IR760140040004110176408212,2000000,زهرا,حسین پور,حقوق,\r\n'.encode('utf-8'))
+                         'IR760140040004110176408212,2000000,زهرا,حسین پور,حق المشاوره,\r\n'.encode('utf-8'))
 
     def test_iban_checksum_country_and_length(self):
         self.assertTrue(valid_iranian_iban(' ir76 0140040004110176408212 '))
