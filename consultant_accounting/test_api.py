@@ -199,3 +199,38 @@ class DetailedReportTests(TestCase):
                        {'start': '2026-11-07', 'end': '2026-11-01'}):
             self.assertEqual(self.client.get('/reports/', params).status_code, 400)
         self.assertEqual(self.client.get('/reports/export/', {'file_type': 'pdf'}).status_code, 400)
+
+
+class CurrentDebtTests(TestCase):
+    def test_payment_after_report_end_is_reflected_in_current_debt(self):
+        from datetime import date
+        from api.models import Author
+        from .reports import build_report, date_boundary
+        user = get_user_model().objects.create_user(username='current-debt-test')
+        Author.objects.create(userId=user)
+        call = CallLog.objects.create(authorId=user, call_amount=2000000)
+        CallLog.objects.filter(pk=call.pk).update(created_at=date_boundary(date(2026, 11, 1)))
+        payment = Transaction.objects.create(userId=user, type='w', amount=40000)
+        Transaction.objects.filter(pk=payment.pk).update(created_at=date_boundary(date(2026, 11, 9)))
+        report = build_report(end=date(2026, 11, 8))
+        row = report['results'][0]
+        self.assertEqual(row['balance'], 100000)
+        self.assertEqual(row['current_balance'], 60000)
+        self.assertEqual(row['current_payable'], 60000)
+        self.assertEqual(row['period_remaining_payable'], 60000)
+        self.assertEqual(report['totals']['current_payable'], 60000)
+        next_period = build_report(start=date(2026, 11, 10))['results'][0]
+        self.assertEqual(next_period['opening_balance'], 60000)
+        self.assertEqual(next_period['balance'], 60000)
+        self.assertEqual(next_period['current_payable'], 60000)
+
+    def test_credit_for_one_consultant_does_not_hide_debt_to_another(self):
+        from api.models import Author
+        from .reports import build_report
+        for number, amount in [(1, 10000), (2, -5000)]:
+            user = get_user_model().objects.create_user(username='debt-total-{}'.format(number))
+            Author.objects.create(userId=user)
+            Transaction.objects.create(userId=user, type='w', amount=amount)
+        report = build_report()
+        self.assertEqual(report['totals']['current_balance'], -5000)
+        self.assertEqual(report['totals']['current_payable'], 5000)

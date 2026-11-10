@@ -39,8 +39,9 @@ def build_report(start=None, end=None, consultant=None, search=''):
         (Transaction.objects.filter(userId__in=user_ids, type='w').annotate(
             event_at=Coalesce('settlement_document__batch__paid_at', 'created_at')), 'userId', 'amount'),
     ]
-    before, current = [], []
+    before, current, lifetime = [], [], []
     for queryset, owner, amount in sources:
+        lifetime.append(totals(queryset, owner, amount))
         date_field = 'event_at' if owner == 'userId' else 'created_at'
         if end:
             queryset = queryset.filter(**{date_field + '__lt': date_boundary(end + timedelta(days=1))})
@@ -67,6 +68,7 @@ def build_report(start=None, end=None, consultant=None, search=''):
         gross = call + message
         available = previous['balance'] + gross
         balance = available - paid
+        live = calculate_revenue(*(values.get(user.pk) for values in lifetime))
         shabas = accounts.get(user.pk, set())
         rows.append({
             'user_id': user.pk, 'first_name': user.first_name, 'last_name': user.last_name,
@@ -76,10 +78,13 @@ def build_report(start=None, end=None, consultant=None, search=''):
             'opening_balance': previous['balance'], 'previous_payments': previous['deductions'],
             'deductions': previous['deductions'] + paid, 'tax': None,
             'payable': max(available, 0), 'paid_in_period': paid, 'balance': balance,
+            'current_balance': live['balance'], 'current_payable': live['payable'],
+            'period_remaining_payable': min(max(balance, 0), live['payable']),
             'settlement_status': 'settled' if balance <= 0 else ('partial' if paid > 0 else 'unpaid'),
         })
     keys = ['call_share', 'message_share', 'gross_earnings', 'opening_balance',
-            'previous_payments', 'deductions', 'payable', 'paid_in_period', 'balance']
+            'previous_payments', 'deductions', 'payable', 'paid_in_period', 'balance',
+            'current_balance', 'current_payable', 'period_remaining_payable']
     return {'currency': 'toman', 'tax_status': 'pending', 'ledger_status': 'pending',
             'results': rows, 'totals': {key: sum(row[key] for row in rows) for key in keys}}
 
