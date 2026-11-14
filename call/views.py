@@ -24,9 +24,11 @@ class CallCreateViewSet(APIView):
                 # return Response({"msg": "consultant is busy, please try later"}, status=400)
                 return Response({"msg": "مشاور با شخص دیگری درحال مکالمه میباشد"}, status=400)
             # find number from myNumbers
+            is_registered_number = False
             if  self.request.user.username != str(checkUserNember):
                 if not Number.objects.filter(userId=self.request.user.id).filter(number=checkUserNember).count():
                     return Response({"msg": checkUserNember+" in list subNumber Not Found..."}, status=400)
+                is_registered_number = True
         except:
             return Response({"msg": "'userNember' and 'userIdAuthor' is required"}, status=400)
         try:
@@ -76,7 +78,7 @@ class CallCreateViewSet(APIView):
                     AmountPerMin = str(authorserializer.data['call_price']*10)
                     data={
                         "call_id": call_id,
-                        "CustomerNum": "0"+firstNum,    
+                        "CustomerNum": firstNum[2:] if is_registered_number and firstNum.startswith("21") else "0"+firstNum,
                         "ConsultantNum": "0"+secendNum,
                         "Credit": FirstCredit,
                         "AmountPerMin": AmountPerMin
