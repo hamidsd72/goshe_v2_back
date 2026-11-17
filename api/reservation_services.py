@@ -110,7 +110,7 @@ def book(user, author_id, number, start, duration, request_key, quoted_amount_ri
     if quoted_amount_rial is not None and quoted_amount_rial != amount:
         raise SlotConflict('تعرفه مشاور تغییر کرده است؛ زمان‌ها و مبلغ را دوباره دریافت کنید.')
     if amount > 2147483647 or users[user.pk].amount < amount:
-        raise ValidationError('موجودی کیف پول برای این رزرو کافی نیست.')
+        raise ValidationError({'code': 'insufficient_funds', 'detail': 'موجودی کیف پول برای این رزرو کافی نیست.'})
     get_user_model().objects.filter(pk=user.pk).update(amount=F('amount') - amount)
     visit = AuthorVisit.objects.create(AuthorId=author, AuthorUserId_id=author.userId_id,
         userId=user, number=number, visitTime=start, active=True, autoDial=True)
@@ -194,11 +194,21 @@ def dispatch(pk):
         return
     with transaction.atomic():
         credit = lock_credit(pk)
+        call.refresh_from_db(fields=['Sitak_id'])
+        if call.Sitak_id is not None and call.Sitak_id != sitak_id:
+            # Recovery may have bound a verified ID while this request was in flight.
+            credit.failure_code = 'provider_id_mismatch'
+            credit.save(update_fields=['failure_code', 'updated_at'])
+            return
         CallLog.objects.filter(pk=call.pk).update(Sitak_id=sitak_id)
-        if credit.status != 'completed':
+        if credit.status in ('dialing', 'uncertain'):
             CallLog.objects.filter(pk=call.pk).update(type='کد 1 در حال تماس')
             credit.status = 'in_call'
             credit.save(update_fields=['status', 'updated_at'])
+        elif credit.status == 'failed':
+            # Retain the terminal state and refunded ledger for operator investigation.
+            credit.failure_code = 'provider_response_after_refund'
+            credit.save(update_fields=['failure_code', 'updated_at'])
 
 
 @transaction.atomic

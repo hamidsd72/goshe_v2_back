@@ -37,6 +37,66 @@ class ReservationTests(TestCase):
         args.update(kwargs)
         return svc.book(**args)
 
+    def test_reservation_apis_hide_phones_and_consultant_list_returns_customer_name(self):
+        self.user.first_name = 'علی'
+        self.user.last_name = 'احمدی'
+        self.user.save()
+        availability = self.client.get('/author-shift-list/', {'authorId': self.author.pk})
+        self.assertNotIn('consultant_number', availability.data)
+        response = self.post()
+        self.assertEqual(response.status_code, 201)
+        self.assertNotIn('consultant_number', response.data)
+        self.assertEqual(response.data['number'], self.user.username)
+        self.client.force_authenticate(self.doctor)
+        response = self.client.get('/author-shift/')
+        rows = response.data.get('results', []) if isinstance(response.data, dict) else response.data
+        self.assertEqual(len(rows), 1)
+        self.assertNotIn('number', rows[0])
+        self.assertEqual(rows[0]['customer_first_name'], 'علی')
+        self.assertEqual(rows[0]['customer_last_name'], 'احمدی')
+        self.assertNotIn('consultant_number', rows[0])
+
+    def test_legacy_user_and_author_responses_keep_username(self):
+        self.author.refresh_from_db()
+        from api.serializers import AuthorSerializer, AdminAuthorSerializer
+        from account.views import UserViewSet
+        from rest_framework.test import APIRequestFactory, force_authenticate
+        for serializer in (AuthorSerializer, AdminAuthorSerializer):
+            self.assertEqual(serializer(self.author).data['userId']['username'], self.doctor.username)
+        raw = APIRequestFactory().get('/')
+        force_authenticate(raw, self.user)
+        response = UserViewSet.as_view({'get': 'retrieve'})(raw, pk=self.doctor.pk)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['username'], self.doctor.username)
+        self.assertIn('email', response.data)
+
+    def test_legacy_wallet_updates_can_read_and_submit_username(self):
+        from account.serializers import UserAmountSerializer
+        old = UserAmountSerializer(self.user).data
+        self.assertEqual(old['username'], self.user.username)
+        update = UserAmountSerializer(self.user, data={
+            'amount': old['amount'] + 100000, 'username': old['username'],
+        })
+        self.assertTrue(update.is_valid(), update.errors)
+        update.save()
+        self.assertEqual(self.balance(), 1100000)
+        self.assertEqual(self.user.username, old['username'])
+
+    def test_partial_wallet_is_untouched_and_full_payment_funds_booking(self):
+        self.user.amount = 100000  # 10,000 toman
+        self.user.save()
+        response = self.post(duration=60, quoted_amount_rial=600000)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data['code'], 'insufficient_funds')
+        self.assertEqual(self.balance(), 100000)
+        self.assertFalse(ReservationCredit.objects.exists())
+        self.assertFalse(Task.objects.exists())
+        # A verified gateway payment credits the full reservation price, never the shortfall.
+        self.user.amount += 600000
+        self.user.save()
+        self.assertEqual(self.post(duration=60, quoted_amount_rial=600000).status_code, 201)
+        self.assertEqual(self.balance(), 100000)
+
     def balance(self):
         self.user.refresh_from_db()
         return self.user.amount
@@ -252,6 +312,57 @@ class ReservationTests(TestCase):
         with self.due(credit), patch('api.reservation_providers.create_call', side_effect=callback): reservation_call.now(credit.pk)
         credit.refresh_from_db(); self.assertEqual(credit.status, 'completed')
         self.assertEqual(self.balance(), 1000000)
+
+    def test_late_provider_response_cannot_reopen_operator_refunded_reservation(self):
+        credit = self.book()
+        def refund_while_waiting(call, held):
+            call_command('reconcile_reservation', held.pk, not_created=True,
+                         confirm_provider_checked=True, stdout=StringIO())
+            return 999
+        with self.due(credit), patch('api.reservation_providers.create_call', side_effect=refund_while_waiting):
+            reservation_call.now(credit.pk)
+        credit.refresh_from_db()
+        self.assertEqual(credit.status, 'failed')
+        self.assertEqual(credit.refunded_rial, credit.amount_rial)
+        self.assertEqual(credit.call.call_amount, 0)
+        self.assertEqual(credit.call.Sitak_id, 999)
+        self.assertEqual(credit.failure_code, 'provider_response_after_refund')
+        self.assertEqual(self.balance(), 1000000)
+
+    def test_late_response_does_not_overwrite_operator_verified_provider_id(self):
+        credit = self.book()
+        def bind_while_waiting(call, held):
+            call_command('reconcile_reservation', held.pk, provider_id=555,
+                         confirm_provider_checked=True, stdout=StringIO())
+            return 999
+        with self.due(credit), patch('api.reservation_providers.create_call', side_effect=bind_while_waiting):
+            reservation_call.now(credit.pk)
+        credit.refresh_from_db()
+        self.assertEqual(credit.call.Sitak_id, 555)
+        self.assertEqual(credit.status, 'in_call')
+        self.assertEqual(credit.failure_code, 'provider_id_mismatch')
+        self.assertEqual(self.balance(), 700000)
+
+    def test_database_worker_runs_due_tasks_only_from_reservations_queue(self):
+        from background_task.tasks import tasks
+        credit = self.book()
+        # A different worker owns this task; reservations must never consume it.
+        foreign = reservation_sms(credit.notifications.first().pk, queue='other')
+        with patch('api.reservation_providers.send_pattern', return_value='123') as sms, \
+                patch('api.reservation_providers.create_call', return_value=999) as provider:
+            self.assertTrue(tasks.run_next_task(queue='reservations'))
+            self.assertTrue(tasks.run_next_task(queue='reservations'))
+            self.assertFalse(tasks.run_next_task(queue='reservations'))
+            provider.assert_not_called()
+            with self.due(credit):
+                self.assertTrue(tasks.run_next_task(queue='reservations'))
+                self.assertFalse(tasks.run_next_task(queue='reservations'))
+        credit.refresh_from_db()
+        self.assertEqual(credit.status, 'in_call')
+        self.assertEqual(sms.call_count, 2)
+        provider.assert_called_once()
+        self.assertTrue(Task.objects.filter(pk=foreign.pk).exists())
+        self.assertFalse(Task.objects.filter(queue='reservations').exists())
 
     def test_sms_adapter_uses_console_token_json_and_receipt(self):
         with patch('account.services.requests.post') as http:

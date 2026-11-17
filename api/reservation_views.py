@@ -30,7 +30,7 @@ class ReservationSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ReservationCredit
-        fields = ['id', 'AuthorId', 'userId', 'number', 'consultant_number', 'visitTime', 'jpublish',
+        fields = ['id', 'AuthorId', 'userId', 'number', 'visitTime', 'jpublish',
                   'duration', 'ends_at', 'rate_rial', 'amount_rial', 'refunded_rial', 'status', 'active', 'can_cancel', 'request_key']
         read_only_fields = fields
 
@@ -39,6 +39,16 @@ class ReservationSerializer(serializers.ModelSerializer):
 
     def get_can_cancel(self, obj):
         return obj.status == 'confirmed' and obj.visit.visitTime > timezone.now()
+
+
+class ConsultantReservationSerializer(ReservationSerializer):
+    customer_first_name = serializers.CharField(source='payer.first_name', read_only=True)
+    customer_last_name = serializers.CharField(source='payer.last_name', read_only=True)
+
+    class Meta(ReservationSerializer.Meta):
+        fields = [field for field in ReservationSerializer.Meta.fields if field != 'number'] + [
+            'customer_first_name', 'customer_last_name']
+        read_only_fields = fields
 
 
 class UserRegisterShiftUsingAuthorViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, GenericViewSet):
@@ -60,11 +70,11 @@ class UserRegisterShiftUsingAuthorViewSet(mixins.ListModelMixin, mixins.Retrieve
 
 class AuthorShiftViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, GenericViewSet):
     queryset = ReservationCredit.objects.all()
-    serializer_class = ReservationSerializer
+    serializer_class = ConsultantReservationSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return self.queryset.filter(consultant=self.request.user).select_related('visit').order_by('visit__visitTime')
+        return self.queryset.filter(consultant=self.request.user).select_related('visit', 'payer').order_by('visit__visitTime')
 
     @action(detail=True, methods=['post'])
     def cancel(self, request, pk=None):
@@ -111,5 +121,5 @@ class AuthorShiftListViewSet(GenericViewSet):
                     slots.append({'start': start.isoformat(), 'end': end.isoformat()})
                 start += timedelta(minutes=10)
         return Response({'slots': slots, 'duration': duration, 'rate_rial': author.call_price * 10,
-            'amount_rial': author.call_price * 10 * duration, 'consultant_number': author.userId.username,
+            'amount_rial': author.call_price * 10 * duration,
             'timezone': 'Asia/Tehran'})

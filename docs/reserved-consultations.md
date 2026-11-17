@@ -41,7 +41,7 @@
 
 | درخواست | نتیجه |
 | --- | --- |
-| GET `author-shift-list/?authorId=ID&duration=30` | شیء شامل `slots:[{start,end}]`، `duration`، `rate_rial`، `amount_rial`، `consultant_number` و `timezone`؛ فهرست عمومی رزروها/شماره کاربران برگردانده نمی‌شود |
+| GET `author-shift-list/?authorId=ID&duration=30` | شیء شامل `slots:[{start,end}]`، `duration`، `rate_rial`، `amount_rial` و `timezone`؛ فهرست عمومی رزروها/شماره کاربران برگردانده نمی‌شود |
 | POST `user-register-shift-using-author/` | ایجاد رزرو قطعی با فیلدهای زیر؛ مبلغ و مالک در سرور تعیین می‌شوند |
 | GET `user-register-shift-using-author/` | رزروهای همین پرداخت‌کننده؛ صفحه‌بندی معمول DRF |
 | GET `author-shift/` | رزروهای همین مشاور؛ `authorId` ارسالی در URL مجوز دیدن رزرو شخص دیگر ایجاد نمی‌کند |
@@ -164,6 +164,8 @@ python manage.py retry_reservation_sms NOTIFICATION_ID --confirm-provider-checke
 
 ## تست
 
+گزارش آخرین بررسی انتشار، اصلاحات حالت‌های مرزی و اجرای کل تست‌ها روی SQLite و MariaDB در [reservation-release-audit.md](reservation-release-audit.md) ثبت شده است.
+
 تست‌های رزرو و provider با داده و تنظیمات جدا از .env، و providerهای mock اجرا می‌شوند:
 
 ```bash
@@ -183,3 +185,25 @@ docker compose run --rm frontend yarn build
 بررسی‌های فرانت شامل payload، جلوگیری از double-click، کلید ثابت retry پس از خطای شبکه، refresh پس از 409، کنارگذاشتن پاسخ دیررس، لغو مشاور، تبدیل ریال/تومان و کامپایل templateها است.
 
 نتیجه اجرای محلی این تغییر در ۲۰۲۶/۱۱/۱۶: ۸۸ تست فرانت و build Docker موفق؛ پس از اصلاح اتصال مطابق سرویس‌های فعلی پروژه، ۴۶ تست روی MariaDB/InnoDB موقت شامل پنج سناریوی همزمانی موفق؛ مجموعه رگرسیون ورود، پرداخت، حسابداری، ادمین و رزرو ۱۵۲ تست با سه skip مربوط به نیاز به قفل واقعی دیتابیس در SQLite. تست‌های جدید، JSON ارسال shared و استفاده از همان token تنظیم‌شده برای OTP، تشخیص receipt، عدم نیاز به نام کاربری/رمز و یکسان بودن اتصال تماس فوری/رزرو و حفظ تماس آزمایشی مدیر را بررسی می‌کنند. این موارد skip، جایگزین آزمون‌های concurrency رزرو روی InnoDB نیستند. هشدار قدیمی datetime بدون timezone در Author.service_time و هشدارهای حجم bundle/Browserslist/Bootstrap باقی مانده‌اند؛ وابستگی‌ها ارتقا داده نشدند. اصلاح اتصال اخیر فقط بک‌اند را تغییر داد و build جدید فرانت برای آن لازم نیست.
+
+
+## پرداخت رزرو و محرمانگی شماره‌ها (به‌روزرسانی ۲۰۲۶-۱۱-۱۷)
+
+- موجودی ناکافی: POST رزرو، HTTP 400 با `code: insufficient_funds` و `detail` می‌دهد؛ هیچ برداشت، رزرو یا جابی ساخته نمی‌شود.
+- فرانت یک `transaction/` با مبلغ **کامل رزرو به ریال** و مسیر بازگشت داخلی فرم می‌سازد و از `gateway/paystar/create/link/` لینک می‌گیرد. مثال موجودی ۱۰٬۰۰۰ تومان و رزرو ۵۰٬۰۰۰ تومان: پرداخت ۵۰۰٬۰۰۰ ریال است، نه ۴۰۰٬۰۰۰ ریال.
+- پس از تأیید سروری `gateway/paystar/confirm/`، کل مبلغ به کیف پول اضافه می‌شود و فرانت با request_key اولیه ثبت رزرو را ادامه می‌دهد. در موفقیت، موجودی قبلی باقی می‌ماند. در لغو یا تأیید ناموفق، رزرو خودکار انجام نمی‌شود؛ تأیید نامعلوم باید دوباره بررسی شود.
+- ادامه رزرو در همان تب به draft متعلق به همان کاربر/مشاور و شماره سفارش تأییدشده نیاز دارد. زمان در حین پرداخت قفل نمی‌شود؛ سرور هنگام ثبت دوباره ساعت، تعرفه و هم‌پوشانی را بررسی می‌کند. اگر ثبت ممکن نباشد، وجه پرداختی در کیف پول می‌ماند. retry ثبت از UUID قبلی استفاده می‌کند و پرداخت مجدد خودکار ندارد.
+- محدوده محرمانگی طبق توضیح کاربر: فرم جدید `views/visit/Index.vue` و APIهای رزرو نباید شماره مشاور را به کاربر بدهند. availability و خروجی رزرو `consultant_number` ندارند. در خروجی ثبت رزرو برای خود کاربر، `number` حفظ می‌شود. فهرست، جزئیات و پاسخ لغو رزرو مشاور از serializer مخصوص استفاده می‌کنند: `number` ارسال نمی‌شود و `customer_first_name` و `customer_last_name` نمایش نام کاربر را ممکن می‌کنند. در نبود نام، فرانت «نام کاربر ثبت نشده» نشان می‌دهد و شماره را جایگزین نام نمی‌کند. snapshot داخلی شماره‌ها برای تماس/پیامک باقی می‌ماند. این تغییر به بخش‌های قدیمی پروژه تعمیم داده نمی‌شود.
+- تغییرات عمومی حذف username و محدودسازی account/Djoser برگردانده شدند. قرارداد serializerهای مشترک و دسترسی endpointهای قدیمی حفظ شده است.
+- تغییر schema یا migration لازم نیست. بک‌اند و build جدید فرانت باید با هم به‌روزرسانی شوند؛ فرانت قدیمی نباید به شماره طرف مقابل متکی باشد.
+
+
+### بررسی مصرف serializerهای مشترک و سازگاری
+
+| Serializer | مصرف‌کنندگان فعلی | نتیجه بررسی |
+| --- | --- | --- |
+| `api.UserAuthorSerializer` | AuthorSerializer، AdminAuthorSerializer، HeadMessageSerializer، FollowerSerializer، UserVisitExamForAuthorSerializer و ticket.TicketSerializer2 | در پروفایل مشاور، پیام‌ها، دنبال‌کننده‌ها، پاسخ آزمون و تیکت به صورت nested مصرف می‌شود؛ username آن حفظ شد. |
+| `account.MyUserSerializer` | account.UserViewSet (`my-user/`)، ساخت تماس در call/views.py و جریان قدیمی payment/views.py | حذف شرطی فیلدهای حساب لغو شد؛ پاسخ قدیمی حفظ شد. |
+| `account.UserAmountSerializer` | account.UserAmountViewSet (`amount-user/`)، call/views.py، api/views.py و payment/views.py | چند جریان مالی مستقیماً `serializer.data['username']` را می‌خوانند؛ حذف آن باعث KeyError می‌شد. username و قابلیت به‌روزرسانی موجودی با آن حفظ شد. |
+
+تست رگرسیون، وجود username در پروفایل‌های قدیمی و حساب، خواندن/ارسال username هنگام به‌روزرسانی کیف پول و حذف شماره مشاور فقط از پاسخ‌های رزرو را پوشش می‌دهد. رفتار پرداخت مبلغ کامل رزرو تغییر نکرده است.

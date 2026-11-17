@@ -402,14 +402,14 @@ class ProfileCountViewSet(APIView):
 # =============================================================
 # authors comments
 class CommentViewSet(ModelViewSet):
-    queryset = Comment.objects.all()
+    queryset = Comment.objects.order_by('-id')
     serializer_class = CommentSerializer
     # lookup_field = "userId"
     permission_classes = [IsUserIdOrReadOnly]
     pagination_class = LargeResultsSetPagination
 
     def get_queryset(self):
-        queryset = Comment.objects.all()
+        queryset = Comment.objects.order_by('-id')
         authorId = self.request.query_params.get('authorId')
         if authorId is not None:
             queryset = queryset.filter(authorId=authorId)
