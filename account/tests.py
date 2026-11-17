@@ -5,6 +5,8 @@ from unittest.mock import Mock, patch
 from datetime import timedelta
 
 from .services import OtpDeliveryError, _extract_otp, normalize_iran_mobile, send_auth_otp
+from .services import SmsDeliveryError, send_pattern_sms
+import requests
 
 
 class MobileNormalizationTests(TestCase):
@@ -59,6 +61,56 @@ class MeliPayamakOtpServiceTests(SimpleTestCase):
         with self.settings(MELIPAYAMAK_OTP_TOKEN=""):
             with self.assertRaises(OtpDeliveryError):
                 send_auth_otp("9123456789")
+
+
+class MeliPayamakPatternServiceTests(SimpleTestCase):
+    @patch('account.services.requests.post')
+    def test_confirmation_pattern_uses_existing_console_token_and_json(self, post):
+        post.return_value.json.return_value = {'recId': 123456789012345678, 'status': 'عملیات موفق'}
+        with self.settings(MELIPAYAMAK_OTP_TOKEN='test-console-token', MELIPAYAMAK_OTP_TIMEOUT=4):
+            receipt = send_pattern_sms('9123456789', 589588, ['1405/08/26', '10:30'])
+        self.assertEqual(receipt, '123456789012345678')
+        post.assert_called_once_with('https://console.melipayamak.com/api/send/shared/test-console-token',
+            json={'bodyId': 589588, 'to': '09123456789', 'args': ['1405/08/26', '10:30']}, timeout=4)
+
+    @patch('account.services.requests.post')
+    def test_cancellation_has_one_argument_and_no_username_password(self, post):
+        post.return_value.json.return_value = {'recId': '123456789012345678'}
+        with self.settings(MELIPAYAMAK_OTP_TOKEN='test-console-token', MELIPAYAMAK_OTP_TIMEOUT=10):
+            send_pattern_sms('09123456789', 589593, ['1405/08/26'])
+        self.assertEqual(post.call_args.kwargs['json'], {'bodyId': 589593, 'to': '09123456789', 'args': ['1405/08/26']})
+        self.assertNotIn('data', post.call_args.kwargs)
+
+    @patch('account.services.requests.post')
+    def test_otp_and_shared_use_same_configured_token(self, post):
+        post.return_value.json.side_effect = [{'code': '12345'}, {'recId': '123456789012345678'}]
+        with self.settings(MELIPAYAMAK_OTP_TOKEN='test-console-token', MELIPAYAMAK_OTP_TIMEOUT=4):
+            send_auth_otp('9123456789')
+            send_pattern_sms('9123456789', 589593, ['1405/08/26'])
+        self.assertEqual([call.args[0] for call in post.call_args_list], [
+            'https://console.melipayamak.com/api/send/otp/test-console-token',
+            'https://console.melipayamak.com/api/send/shared/test-console-token'])
+
+    @patch('account.services.requests.post')
+    def test_http_200_without_positive_recid_is_not_success(self, post):
+        for payload in ({'status': 'خطا'}, {'recId': 0}, {'recId': -1}, {'recId': True}, {'recId': 'bad'}, {'Value': '123456789012345678'}, []):
+            post.return_value.json.return_value = payload
+            with self.settings(MELIPAYAMAK_OTP_TOKEN='test-console-token', MELIPAYAMAK_OTP_TIMEOUT=4):
+                with self.assertRaises(SmsDeliveryError): send_pattern_sms('9123456789', 589593, ['1405/08/26'])
+
+    @patch('account.services.requests.post')
+    def test_unconfigured_or_invalid_mobile_does_not_send(self, post):
+        with self.settings(MELIPAYAMAK_OTP_TOKEN=''):
+            with self.assertRaises(SmsDeliveryError): send_pattern_sms('9123456789', 589593, ['date'])
+        with self.settings(MELIPAYAMAK_OTP_TOKEN='test-console-token'):
+            with self.assertRaises(SmsDeliveryError): send_pattern_sms('123', 589593, ['date'])
+        post.assert_not_called()
+
+    @patch('account.services.requests.post', side_effect=requests.Timeout('provider request failed'))
+    def test_network_error_is_sanitized(self, post):
+        with self.settings(MELIPAYAMAK_OTP_TOKEN='test-console-token', MELIPAYAMAK_OTP_TIMEOUT=4):
+            with self.assertRaisesMessage(SmsDeliveryError, 'SMS delivery failed'):
+                send_pattern_sms('9123456789', 589593, ['date'])
 
 
 class AuthOtpApiTests(TestCase):

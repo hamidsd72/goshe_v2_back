@@ -8,6 +8,10 @@ class OtpDeliveryError(Exception):
     """Raised when the OTP provider cannot accept or create an OTP."""
 
 
+class SmsDeliveryError(Exception):
+    """Console pattern submission failed; never include credentials in errors."""
+
+
 def normalize_iran_mobile(username):
     mobile = str(username).strip()
     if re.fullmatch(r"9\d{9}", mobile):
@@ -52,3 +56,25 @@ def send_auth_otp(username):
         return _extract_otp(response.json())
     except (requests.RequestException, ValueError) as exc:
         raise OtpDeliveryError("OTP delivery failed") from exc
+
+
+def send_pattern_sms(number, pattern, arguments):
+    """Use the project's Console token and shared-pattern JSON contract."""
+    token = settings.MELIPAYAMAK_OTP_TOKEN
+    if not token:
+        raise SmsDeliveryError('SMS provider is not configured')
+    try:
+        response = requests.post(
+            'https://console.melipayamak.com/api/send/shared/{}'.format(token),
+            json={'bodyId': int(pattern), 'to': normalize_iran_mobile(number),
+                  'args': [str(argument) for argument in arguments]},
+            timeout=settings.MELIPAYAMAK_OTP_TIMEOUT,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        receipt = str(payload.get('recId', '')) if isinstance(payload, dict) else ''
+        if not re.fullmatch(r'[0-9]+', receipt) or int(receipt) <= 0:
+            raise SmsDeliveryError('SMS provider did not return a receipt')
+        return receipt
+    except (requests.RequestException, ValueError, TypeError):
+        raise SmsDeliveryError('SMS delivery failed') from None

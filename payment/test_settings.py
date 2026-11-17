@@ -8,9 +8,9 @@ USE_TZ = True
 DATABASES = {"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": ":memory:"}}
 INSTALLED_APPS = [
     "django.contrib.auth", "django.contrib.contenttypes", "rest_framework.authtoken",
-    "account", "api", "payment",
+    "account", "api", "payment", "call",
 ]
-MIGRATION_MODULES = {"account": None, "api": None}
+MIGRATION_MODULES = {"account": None, "api": None, "call": None}
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 AUTH_USER_MODEL = "account.User"
 ROOT_URLCONF = "payment.test_urls"

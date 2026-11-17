@@ -10,44 +10,8 @@ from random import randint
 from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView 
 from rest_framework.response import Response
-from datetime import datetime, timedelta
-import os
+from datetime import timedelta
 import requests
-from background_task import background
-import subprocess
-
-@background(schedule=10)
-def createCallAtTime(params):
-    msg = '''curl -X POST https://console.melipayamak.com/api/send/shared/1515c626310f4b529d6af64d0acedafe -H 'Content-Type: application/json' -d '{"bodyId": 74630, "to": '''+str('"0'+params+'"')+''' ,"args": [] }' '''
-    os.system(msg)
-
-class StartProcessTasksViewSet(APIView):
-    permission_classes = [IsSuperUser,]
-    def get():
-        try:
-            bash = './backend/manage.py process_tasks'
-            subprocess.call(bash, shell=True)
-            return Response({"msg": "isDone"}, status=200)
-        except:
-            return Response({"msg": "error"}, status=404)
-
-class CreateTaskCallInTimeViewSet(APIView):
-    def post(self, request):
-        try:
-            time = datetime.now()
-            if(request.data["days"] > 0 & request.data["days"] < 30):
-                time += timedelta(days=request.data["days"])
-            if(request.data["hours"] > 0 & request.data["hours"] < 12):
-                time += timedelta(hours=request.data["hours"])
-            if(request.data["minutes"] > 0 & request.data["minutes"] < 60):
-                time += timedelta(minutes=request.data["minutes"])
-            phones = [request.data['from'], request.data['to']]
-
-
-            # createCallAtTime(params, schedule=time)
-            return Response({"msg": "isDone"}, status=200)
-        except:
-            return Response({"msg": "error"}, status=404)
 
 class CreateCodeUserViewSet(APIView):
     permission_classes = [AllowAny,]

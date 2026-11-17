@@ -150,18 +150,3 @@ class CreateAnswerVisitedExamSerializer(serializers.ModelSerializer):
         model = AnswerVisitedExam
         fields = "__all__"
 
-class VisitSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = AuthorVisit
-        fields = ["AuthorId","AuthorUserId","userId","number","visitTime","autoDial","jpublish"]
-
-class AuthorVisitSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = AuthorVisit
-        fields = ["id","userId","visitTime","autoDial","active","jpublish"]
-
-class AuthorVisitListSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = AuthorVisit
-        fields = ["visitTime","active","jpublish"]
-

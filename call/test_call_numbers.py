@@ -1,5 +1,6 @@
 """Run with --settings=api.dashboard_test_settings; no external calls."""
 from unittest.mock import patch
+from types import SimpleNamespace
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -7,7 +8,8 @@ from rest_framework.test import APIRequestFactory, force_authenticate
 
 from api.models import Author
 from call.models import CallLog, Number
-from call.views import CallCreateViewSet
+from call.views import CallCreateViewSet, AdminCallCreateViewSet
+from api.reservation_providers import create_call
 
 
 class CallNumberTests(TestCase):
@@ -65,3 +67,32 @@ class CallNumberTests(TestCase):
             response = self.create_call("12345678")
         self.assertEqual(response.status_code, 400)
         provider.assert_not_called()
+
+    def test_reserved_and_immediate_calls_share_existing_endpoint_and_authorization(self):
+        credit = SimpleNamespace(visit=SimpleNamespace(number=self.user.username),
+            consultant_number=self.consultant.username, amount_rial=30000, rate_rial=1000)
+        with patch('call.views.requests.request') as provider:
+            provider.return_value.json.return_value = {'Sitak_id': 123, 'status_id': 1}
+            self.assertEqual(self.create_call(self.user.username).status_code, 201)
+            immediate = provider.call_args
+            self.assertEqual(create_call(SimpleNamespace(pk=77), credit), 123)
+            reserved = provider.call_args
+        # Do not let assertion failures print any existing transport credentials.
+        self.assertTrue(immediate.args == reserved.args, 'Both paths must use the same HTTP method and URL')
+        self.assertTrue(immediate.kwargs['headers'] == reserved.kwargs['headers'], 'Both paths must use identical provider headers')
+        self.assertEqual(reserved.kwargs['data']['Credit'], '30000')
+        self.assertEqual(reserved.kwargs['data']['AmountPerMin'], '1000')
+        self.assertEqual(reserved.kwargs['timeout'], 20)
+
+    def test_admin_call_preserves_existing_payload_with_shared_transport(self):
+        self.user.is_superuser = True
+        request = APIRequestFactory().post('/admin-call/', {'myMobile': self.user.username,
+            'username': self.consultant.username}, format='json')
+        force_authenticate(request, self.user)
+        with patch('call.views.requests.request') as provider:
+            provider.return_value.json.return_value = {'Sitak_id': 123, 'status_id': 1}
+            response = AdminCallCreateViewSet.as_view()(request)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(provider.call_count, 1)
+        self.assertEqual(provider.call_args.kwargs['data'], {'call_id': '1', 'CustomerNum': '0' + self.user.username,
+            'ConsultantNum': '0' + self.consultant.username, 'Credit': '10000', 'AmountPerMin': '10'})

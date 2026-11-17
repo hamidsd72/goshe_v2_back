@@ -1,9 +1,10 @@
 from rest_framework import routers
 from .views import ( CategoryViewSet ,NotifyViewSet ,TransactionViewSet ,MessageViewSet, CreateMessageViewSet ,FollowerViewSet ,
 CreateFollowerViewSet ,AuthorViewSet ,UserAuthorViewSet ,CreateAuthorViewSet ,CommentViewSet ,DocumentViewSet ,AdminUserAuthorViewSet ,
-AdminAuthorViewSet ,AdminTransactionViewSet ,UserRegisterShiftUsingAuthorViewSet ,AuthorShiftViewSet ,AuthorShiftListViewSet,
+AdminAuthorViewSet ,AdminTransactionViewSet,
  CreateExamViewSet, UserExamForAuthorViewSet, QuestionsExamViewSet, VisitExamViewSet, CreateVisitExamViewSet, AuthorYearlyPriceViewSet)
 from django.urls import path
+from .reservation_views import UserRegisterShiftUsingAuthorViewSet, AuthorShiftViewSet, AuthorShiftListViewSet
 
 app_name = 'api'
 router = routers.SimpleRouter()

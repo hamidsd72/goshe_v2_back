@@ -7,7 +7,7 @@ import math
 import datetime
 from .serializers import ( CategorySerializer ,NotifySerializer ,TransactionSerializer ,PaymentTransactionSerializer, HeadMessageSerializer ,
 MessageSerializer ,FollowerSerializer ,CreateFollowerSerializer, AuthorSerializer ,CreateAuthorSerializer ,CommentSerializer ,DocumentSerializer,
- FindAuthorAuthorSerializer, AdminAuthorSerializer, AdminEditAuthorSerializer, VisitSerializer, AuthorVisitSerializer, AuthorVisitListSerializer,
+ FindAuthorAuthorSerializer, AdminAuthorSerializer, AdminEditAuthorSerializer,
  CreateExamSerializer ,QuestionsExamSerializer ,VisitExamSerializer ,CreateVisitExamSerializer ,CreateAnswerVisitedExamSerializer
    ,UserVisitExamForAuthorSerializer, UserAuthorSerializer )
 
@@ -419,62 +419,6 @@ class CommentViewSet(ModelViewSet):
             queryset = queryset.filter(userId=userId)
 
         return queryset
-# users register shift visit using author
-class UserRegisterShiftUsingAuthorViewSet(ModelViewSet):
-    queryset = AuthorVisit.objects.order_by('-id')
-    serializer_class = VisitSerializer
-    permission_classes = [IsUserIdOrReadOnly]
-
-    def get_queryset(self):
-        queryset = AuthorVisit.objects.filter(userId=self.request.user.id)
-        active = self.request.query_params.get('active')
-
-        if active is not None:
-            queryset = queryset.filter(active=True)
-        
-        return queryset
-# =============================================================
-# author view shifts
-class AuthorShiftListViewSet(ModelViewSet):
-    queryset            = AuthorVisit.objects.order_by('-id')
-    serializer_class    = AuthorVisitListSerializer
-    permission_classes  = [IsUserIdOrReadOnly]
-
-    def get_queryset(self):
-        queryset = AuthorVisit.objects.order_by('-id')
-        authorId = self.request.query_params.get('authorId')
-        myDate   = self.request.query_params.get('myDate')
-        active   = self.request.query_params.get('active')
-
-        if authorId is not None:
-            queryset    = queryset.filter(AuthorId=authorId)
-        
-        if myDate is not None:
-            start_week  = datetime.date.today()
-            end_week    = start_week + datetime.timedelta(int(myDate))
-            queryset    = queryset.filter(AuthorId=authorId).filter(visitTime__range=[start_week, end_week])
-
-        if active is not None:
-            queryset    = queryset.filter(active=True)
-
-        return queryset
-# =============================================================
-# author view shifts
-class AuthorShiftViewSet(ModelViewSet):
-    queryset = AuthorVisit.objects.order_by('-id')
-    serializer_class = AuthorVisitSerializer
-    permission_classes = [IsAuthorUserIdOrReadOnly]
-
-    def get_queryset(self):
-        queryset = AuthorVisit.objects.filter(AuthorUserId=self.request.user.id)
-        active   = self.request.query_params.get('active')
-        if active is not None:
-            start_week   = datetime.date.today()
-            end_week     = start_week + datetime.timedelta(365)
-            queryset = queryset.filter(active=active).filter(visitTime__range=[start_week, end_week])
-
-        return queryset
-# =============================================================
 # authors create exam
 class CreateExamViewSet(ModelViewSet):
     queryset = CreateExam.objects.all()
@@ -751,4 +695,4 @@ class AuthorYearlyPriceViewSet(APIView):
                 return Response({"msg": 'با موفقیت پرداخت شد.'}, status=201)
             return Response({"msg": 'مشگل در هنگام پرداخت.'}, status=200)
         return Response({"msg": "موجودی کافی نیست."}, status=200)
-# =============================================================        
+# =============================================================

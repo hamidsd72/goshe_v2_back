@@ -12,7 +12,7 @@ from api.views import ( SendViewSet, ProfileCountViewSet, FindAuthorListViewSet,
 NewestFromUserMessageViewSet, FindAuthorByFamilyViewSet, AdminFindAuthorByUsernameViewSet, AnswerVisitedExamViewSet, AnswerVisitedExamViewSetNew,
  AnswerQuestionsViewSet, AnswerQuestionsViewSetNew, AuthorAnswerToVisitedExamViewSetNew, SendMessageViewSet )
 
-from account.views import CreateCodeUserViewSet, GetCodeUserViewSet, CallCreateCodeUserViewSet, CreateTaskCallInTimeViewSet
+from account.views import CreateCodeUserViewSet, GetCodeUserViewSet, CallCreateCodeUserViewSet
 from call.views import CallCreateViewSet, UpdateCallCreateViewSet, CallAndMessageLogView, AdminCallCreateViewSet, AdminCallAndMessageLogView, FlashCallLogViewSet
 from payment.views import PaymentCreateViewSet, IdPayCallBack, PaymentExamViewSet, novinoCreateViewSet, novinoPaybackViewSet
 from ticket.views import AdminTicketViewSet, SendAdminMsgToUserViewSet
@@ -36,7 +36,6 @@ schema_view = get_schema_view(
 urlpatterns = [
    path('admin-accounting/', include('consultant_accounting.urls')),
    path('', include('consultant_accounting.legacy_urls')),
-   path('CreateTaskCallInTime/', CreateTaskCallInTimeViewSet.as_view()),
    path('send_massege/', SendViewSet.as_view()),
    path('notification-for-users', SendMessageViewSet.as_view()),
    path('countcomment/', ProfileCountViewSet.as_view()),

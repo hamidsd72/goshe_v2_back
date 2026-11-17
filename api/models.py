@@ -288,3 +288,46 @@ class AuthorVisit(models.Model):
 		return jalali_converter(self.visitTime)
 
 	jpublish.short_description = 'تاریخ تولید'
+
+
+class ReservationCredit(models.Model):
+    """Immutable booking snapshots; all money is in rial, never toman."""
+    visit = models.OneToOneField(AuthorVisit, on_delete=models.PROTECT, related_name='credit')
+    payer = models.ForeignKey(User, on_delete=models.PROTECT, related_name='reserved_credits')
+    consultant = models.ForeignKey(User, on_delete=models.PROTECT, related_name='reserved_consultations')
+    request_key = models.UUIDField(unique=True)
+    duration = models.PositiveSmallIntegerField()
+    ends_at = models.DateTimeField(db_index=True)
+    rate_rial = models.PositiveIntegerField()
+    amount_rial = models.PositiveIntegerField()
+    refunded_rial = models.PositiveIntegerField(default=0)
+    consultant_number = models.CharField(max_length=10)
+    customer_sms_number = models.CharField(max_length=11)
+    status = models.CharField(max_length=16, default='confirmed', db_index=True, choices=[
+        (s, s) for s in ('confirmed', 'dialing', 'in_call', 'completed', 'cancelled', 'failed', 'uncertain')
+    ])
+    call = models.OneToOneField('call.CallLog', null=True, blank=True, on_delete=models.PROTECT, related_name='reservation_credit')
+    task_id = models.PositiveIntegerField(null=True, blank=True)
+    failure_code = models.CharField(max_length=40, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(check=models.Q(duration__in=[10, 30, 60]), name='reservation_valid_duration'),
+            models.CheckConstraint(check=models.Q(refunded_rial__lte=models.F('amount_rial')), name='reservation_refund_limit'),
+        ]
+
+
+class ReservationNotification(models.Model):
+    credit = models.ForeignKey(ReservationCredit, on_delete=models.PROTECT, related_name='notifications')
+    kind = models.CharField(max_length=24)
+    number = models.CharField(max_length=11)
+    status = models.CharField(max_length=16, default='pending')
+    attempts = models.PositiveSmallIntegerField(default=0)
+    receipt = models.CharField(max_length=40, blank=True)
+    task_id = models.PositiveIntegerField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['credit', 'kind'], name='unique_reservation_notice')]

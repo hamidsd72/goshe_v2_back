@@ -12,9 +12,34 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.db.models import Q
 import requests
+from django.db import transaction
+from django.db.models import F
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.exceptions import ValidationError
+
+def request_call_provider(data, timeout=None):
+    """Shared transport for immediate, admin and reserved calls; existing configuration."""
+    url = "http://93.118.104.154:61230/FirstAPI.php?="
+    headers = { 'Authorization': 'Basic c2l0YWs6d3EzMXcyM2R0U3dBTUoyMzI3d1VVOVJ2OTViYzY1NEM=' }
+    kwargs = {'headers': headers, 'data': data, 'files': []}
+    if timeout is not None:
+        kwargs['timeout'] = timeout
+    return requests.request('POST', url, **kwargs)
+
 
 class CallCreateViewSet(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
     def post(self, request):
+        from api.reservation_services import lock_users, busy
+        try:
+            consultant_id = int(request.data.get('userIdAuthor'))
+        except (ValueError, TypeError):
+            return Response({'msg': 'مشاور معتبر نیست'}, status=400)
+        lock_users(request.user.pk, consultant_id)
+        if busy([request.user.pk, consultant_id]):
+            return Response({'msg': 'کاربر یا مشاور در حال تماس است'}, status=400)
         try:
             # check get userIdAuthor and userNember
             checkUserIdAuthor = request.data['userIdAuthor']
@@ -70,7 +95,6 @@ class CallCreateViewSet(APIView):
                 if(calLog.is_valid()):
                     calLog.save()
                     # step 2 : set params to send request to "abdolmaleky api"
-                    url = "http://93.118.104.154:61230/FirstAPI.php?="
                     call_id      = str(calLog.data['id'])
                     firstNum     = str(request.data['userNember'])
                     secendNum    = authorUsername
@@ -83,10 +107,8 @@ class CallCreateViewSet(APIView):
                         "Credit": FirstCredit,
                         "AmountPerMin": AmountPerMin
                     }
-                    files=[]
-                    headers = { 'Authorization': 'Basic c2l0YWs6d3EzMXcyM2R0U3dBTUoyMzI3d1VVOVJ2OTViYzY1NEM=' }
                     # step 2.2 : send request call to "abdolmaleky api"
-                    response = requests.request("POST", url, headers=headers, data=data, files=files)
+                    response = request_call_provider(data)
                     # return Response( response.json(), status=200)
                     if response.json()['Sitak_id']:
                         # find call log for update sitak_id 
@@ -106,7 +128,6 @@ class CallCreateViewSet(APIView):
 class AdminCallCreateViewSet(APIView):
     permission_classes = [IsSuperUser]
     def post(self, request):
-        url = "http://93.118.104.154:61230/FirstAPI.php?="
         call_id      = "1"
         firstNum     = request.data["myMobile"]
         secendNum    = request.data["username"]
@@ -119,9 +140,7 @@ class AdminCallCreateViewSet(APIView):
             "Credit": FirstCredit,
             "AmountPerMin": AmountPerMin
         }
-        files=[]
-        headers = { 'Authorization': 'Basic c2l0YWs6d3EzMXcyM2R0U3dBTUoyMzI3d1VVOVJ2OTViYzY1NEM=' }
-        response = requests.request("POST", url, headers=headers, data=data, files=files)
+        response = request_call_provider(data)
         if response.json()['Sitak_id']:
             return Response(response.json(), status=200)
         return Response({"msg": "نتیجه نامعلوم ,اتصال با سرور تماس برقرار نشد"}, status=400)
@@ -129,6 +148,23 @@ class AdminCallCreateViewSet(APIView):
 class UpdateCallCreateViewSet(APIView):
     permission_classes = [IsSuperUserOrReadOnly,]
     def post(self, request):
+        from api.reservation_services import settle
+        try:
+            provider_id = int(request.data['Sitak_id'])
+        except (KeyError, ValueError, TypeError):
+            return Response({'error': 'شناسه تماس معتبر نیست'}, status=400)
+        reserved_call = CallLog.objects.filter(Sitak_id=provider_id, reservation_credit__isnull=False).first()
+        # Some providers callback before the create response has reached us.
+        if not reserved_call and request.data.get('call_id'):
+            reserved_call = CallLog.objects.filter(pk=request.data['call_id'], reservation_credit__isnull=False,
+                Sitak_id__isnull=True).first()
+        if reserved_call:
+            try:
+                detail = 'Customer : {} , Consultant : {}'.format(request.data.get('Customer_Call_Detail', ''), request.data.get('Consultant_Call_Detail', ''))
+                settle(reserved_call.pk, int(request.data['LastCredit']), int(request.data['call_amount']), detail)
+            except (KeyError, ValueError, TypeError, ValidationError):
+                return Response({'error': 'گزارش تسویه رزرو معتبر نیست'}, status=400)
+            return Response({'status': 'completed'}, status=200)
         try:
             try:
                 findCall = CallLog.objects.get(Sitak_id=request.data['Sitak_id'])
@@ -144,12 +180,10 @@ class UpdateCallCreateViewSet(APIView):
             if(updateCallLog.is_valid()):
                 updateCallLog.save()
 
-                authUser    = get_user_model().objects.get(id=updateCallLog.data["userId"])
-                amountUpdate = UserAmountSerializer(authUser, data={"username": authUser.username,"amount": (authUser.amount + int(request.data['LastCredit']) ) })
-                if(amountUpdate.is_valid()):
-                    amountUpdate.save()
-                    return Response(amountUpdate.data, status=200)
-                return Response(amountUpdate.errors, status=200)
+                # Increment in SQL so a concurrent booking deduction is never overwritten.
+                get_user_model().objects.filter(pk=updateCallLog.data['userId']).update(amount=F('amount') + int(request.data['LastCredit']))
+                authUser = get_user_model().objects.get(pk=updateCallLog.data['userId'])
+                return Response(UserAmountSerializer(authUser).data, status=200)
 
             return Response(updateCallLog.errors, status=400)
         except:

@@ -105,8 +105,42 @@ class AuthorVisitAdmin(admin.ModelAdmin):
     list_display  = "AuthorId","AuthorUserId","userId","number","visitTime","active","autoDial","created_at","updated_at"
 
     list_filter   = (['active'])
-    search_fields = ('AuthorId','userId')
+    search_fields = ('AuthorUserId__username','userId__username')
     ordering      = ['-active','created_at']
 
+    def get_readonly_fields(self, request, obj=None):
+        if obj and hasattr(obj, 'credit'):
+            return [field.name for field in self.model._meta.fields]
+        return super().get_readonly_fields(request, obj)
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
 admin.site.register(AuthorVisit, AuthorVisitAdmin)
+
+from .models import ReservationCredit, ReservationNotification
+
+
+class ReservationCreditAdmin(admin.ModelAdmin):
+    list_display = ('id', 'payer', 'consultant', 'duration', 'amount_rial', 'refunded_rial', 'status', 'failure_code')
+    list_filter = ('status',)
+    search_fields = ('payer__username', 'consultant__username')
+
+    def get_readonly_fields(self, request, obj=None):
+        return [field.name for field in self.model._meta.fields]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+class ReservationNotificationAdmin(ReservationCreditAdmin):
+    list_display = ('id', 'credit', 'kind', 'status', 'attempts', 'receipt', 'updated_at')
+    search_fields = ('credit__payer__username', 'credit__consultant__username')
+
+
+admin.site.register(ReservationCredit, ReservationCreditAdmin)
+admin.site.register(ReservationNotification, ReservationNotificationAdmin)
 # ====================================================================================
