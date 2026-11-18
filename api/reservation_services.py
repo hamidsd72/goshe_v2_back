@@ -1,6 +1,7 @@
 """Booking, refunds and call settlement share a stable User-row lock order."""
 from datetime import datetime, timedelta
 import re
+import logging
 import pytz
 from django.contrib.auth import get_user_model
 from django.db import transaction
@@ -189,6 +190,7 @@ def dispatch(pk):
     try:
         sitak_id = providers.create_call(call, credit)
     except Exception:
+        logging.getLogger('project.integrations').warning('reservation_call_unknown', exc_info=True)
         # HTTP timeouts may occur after provider acceptance. Hold funds for reconciliation.
         ReservationCredit.objects.filter(pk=pk, status='dialing').update(status='uncertain', failure_code='provider_result_unknown')
         return

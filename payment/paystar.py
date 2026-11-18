@@ -4,6 +4,7 @@ Protocol: https://docs.paystar.ir/docs/gateway
 Never use callback status alone as proof of payment.
 """
 import hashlib
+import logging
 import hmac
 from decimal import Decimal, InvalidOperation
 from urllib.parse import urlencode, urlsplit
@@ -62,6 +63,7 @@ def _post(action, payload):
             raise PaystarError("ارتباط با درگاه پرداخت ناموفق بود")
         body = response.json()
     except (requests.RequestException, ValueError):
+        logging.getLogger('project.integrations').warning('payment_transport_failed', exc_info=True)
         # Do not expose request headers, credentials or raw provider messages.
         raise PaystarError("ارتباط با درگاه پرداخت ناموفق بود") from None
     if not isinstance(body, dict):

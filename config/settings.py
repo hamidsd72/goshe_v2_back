@@ -71,9 +71,11 @@ INSTALLED_APPS = [
     'corsheaders',
     # background_task
     'background_task',
+    'log_viewer',
 ]
 
 MIDDLEWARE = [
+    'config.project_logging.RequestLogMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     #  cors
@@ -92,7 +94,7 @@ ROOT_URLCONF = 'config.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -169,6 +171,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
 REST_FRAMEWORK = {
+    'EXCEPTION_HANDLER': 'config.project_logging.drf_exception_handler',
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticatedOrReadOnly',
         # 'api.permissions.IsStaffOrReadOnly',
@@ -202,3 +205,15 @@ PAYSTAR_SIGN_KEY = os.environ.get("PAYSTAR_SIGN_KEY", "")
 PAYSTAR_CALLBACK_URL = os.environ.get("PAYSTAR_CALLBACK_URL", "")
 PAYMENT_FRONTEND_URL = os.environ.get("PAYMENT_FRONTEND_URL", "https://doctor.gosheshenava.com")
 PAYSTAR_TIMEOUT = 20
+
+# Private server-side logs; never put this directory under MEDIA_ROOT/STATIC_ROOT.
+from config.project_logging import logging_config
+LOGGING = logging_config(BASE_DIR / 'logs')
+LOG_VIEWER_FILES_DIR = str(BASE_DIR / 'logs')
+LOG_VIEWER_FILES_PATTERN = 'project.log*'
+LOG_VIEWER_FILES = ['project.log']
+LOG_VIEWER_PAGE_LENGTH = 25
+LOG_VIEWER_MAX_READ_LINES = 200
+LOG_VIEWER_FILE_LIST_MAX_ITEMS_PER_PAGE = 20
+LOG_VIEWER_FILE_LIST_TITLE = 'لاگ‌های بک‌اند گوش شنوا'
+CORS_EXPOSE_HEADERS = ['X-Request-ID']

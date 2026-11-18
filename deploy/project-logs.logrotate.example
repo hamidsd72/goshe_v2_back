@@ -1,0 +1,12 @@
+# Install manually as /etc/logrotate.d/goshe-backend after reviewing service ownership.
+# Replace SERVICE_USER and SERVICE_GROUP with the Gunicorn/worker account.
+/root/myprojectdir/backend/logs/project.log {
+    daily
+    maxsize 10M
+    rotate 14
+    missingok
+    notifempty
+    nocompress
+    create 0600 SERVICE_USER SERVICE_GROUP
+    su SERVICE_USER SERVICE_GROUP
+}

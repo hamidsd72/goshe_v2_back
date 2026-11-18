@@ -84,6 +84,7 @@ urlpatterns = [
    path('', include('payment.urls')),
    path('', include('zarrinpall.urls')),
 
+   path('admin/project-logs/', include('config.log_urls')),
    path('admin/', admin.site.urls),
    # for djoser
    path('api/auth/', include('djoser.urls')),

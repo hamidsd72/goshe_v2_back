@@ -1,4 +1,5 @@
 import re
+import logging
 
 import requests
 from django.conf import settings
@@ -40,6 +41,7 @@ def _extract_otp(payload):
 def send_auth_otp(username):
     token = settings.MELIPAYAMAK_OTP_TOKEN
     if not token:
+        logging.getLogger('project.integrations').warning('otp_not_configured')
         raise OtpDeliveryError("OTP provider is not configured")
 
     url = "https://console.melipayamak.com/api/send/otp/{token}".format(
@@ -54,7 +56,12 @@ def send_auth_otp(username):
         )
         response.raise_for_status()
         return _extract_otp(response.json())
+    except OtpDeliveryError:
+        logging.getLogger('project.integrations').warning('otp_delivery_failed', exc_info=True)
+        raise
     except (requests.RequestException, ValueError) as exc:
+        logging.getLogger('project.integrations').warning('otp_delivery_failed', exc_info=True,
+            extra={'provider_status': getattr(getattr(exc, 'response', None), 'status_code', None)})
         raise OtpDeliveryError("OTP delivery failed") from exc
 
 
@@ -62,6 +69,7 @@ def send_pattern_sms(number, pattern, arguments):
     """Use the project's Console token and shared-pattern JSON contract."""
     token = settings.MELIPAYAMAK_OTP_TOKEN
     if not token:
+        logging.getLogger('project.integrations').warning('sms_not_configured')
         raise SmsDeliveryError('SMS provider is not configured')
     try:
         response = requests.post(
@@ -76,5 +84,10 @@ def send_pattern_sms(number, pattern, arguments):
         if not re.fullmatch(r'[0-9]+', receipt) or int(receipt) <= 0:
             raise SmsDeliveryError('SMS provider did not return a receipt')
         return receipt
-    except (requests.RequestException, ValueError, TypeError):
+    except SmsDeliveryError:
+        logging.getLogger('project.integrations').warning('pattern_sms_failed', exc_info=True)
+        raise
+    except (requests.RequestException, ValueError, TypeError) as exc:
+        logging.getLogger('project.integrations').warning('pattern_sms_failed', exc_info=True,
+            extra={'provider_status': getattr(getattr(exc, 'response', None), 'status_code', None)})
         raise SmsDeliveryError('SMS delivery failed') from None

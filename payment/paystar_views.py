@@ -1,4 +1,5 @@
 import json
+import logging
 from collections.abc import Mapping
 from urllib.parse import urlsplit
 
@@ -60,6 +61,7 @@ class PaystarCreateView(APIView):
         except Transaction.DoesNotExist:
             return Response({"msg": "تراکنش یافت نشد"}, status=404)
         except PaystarError as exc:
+            logging.getLogger('project.integrations').warning('payment_failed', exc_info=True)
             return Response({"msg": str(exc)}, status=502)
 
 
@@ -128,6 +130,7 @@ class PaystarCallbackView(APIView):
         except get_user_model().DoesNotExist:
             return Response({"msg": "کاربر تراکنش موجود نیست"}, status=400)
         except PaystarError as exc:
+            logging.getLogger('project.integrations').warning('payment_failed', exc_info=True)
             return Response({"msg": str(exc)}, status=502)
 
 
